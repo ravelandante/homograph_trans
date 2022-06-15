@@ -14,7 +14,8 @@ SET_NAME = 'ADL-Rundle-6'
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 
 FRAMES = 2
-SHIFT = 90
+SHIFT = 80
+
 
 def randomChoice(factor):
     arr = []
@@ -26,6 +27,7 @@ def randomChoice(factor):
     elif ran == 2:
         arr = [0, 0]
     return arr
+
 
 # calc new coords for crop after rotation
 def coordCalc(bounds, angle, center, height):
@@ -44,6 +46,7 @@ def coordCalc(bounds, angle, center, height):
     crop.append(max(bounds[0][1], bounds[1][1]))
     return crop
 
+
 gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')
 gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
 
@@ -51,7 +54,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
     imgPath = BASE_PATH + '/img1/{:06}.jpg'.format(i + 1)
 
     imgOrig = cv2.cvtColor(cv2.imread(imgPath), cv2.COLOR_BGR2RGB)
-    imgPIL = Image.open(imgPath)
+    #imgPIL = Image.open(imgPath)
     num_rows, num_cols = imgOrig.shape[:2]
     totalA = 0
 
@@ -66,33 +69,45 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         factor = (((x_max-x_min)*(y_max-y_min))/totalA)*1.5
         center = ((x_max+x_min)//2, (y_max+y_min)//2)
         angle = random.randint(-80, 80)
+
         # get randomised dest coords
         dstLL = [x_min+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
         dstLR = [x_max+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
         dstUL = [x_min+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
         dstUR = [x_max+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
 
-        filepath_orig = 'out/norm{}_{}.jpg'.format(i, int(objID))
-        imgCropOrig = imgPIL.crop((x_min, y_min, x_max, y_max)) # crop, save original image
-        imgCropOrig.save(filepath_orig)
+        #filepath_orig = 'out/norm{}_{}.jpg'.format(i, int(objID))
+        #imgCropOrig = imgPIL.crop((x_min, y_min, x_max, y_max)) # crop, save original image
+        #imgCropOrig.save(filepath_orig)
 
         # projective transformation (warp)
-        src = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
-        dst = np.float32([dstLL, dstLR, dstUL, dstUR])
+        src_mat = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
+        dst_mat = np.float32([dstLL, dstLR, dstUL, dstUR])
 
-        projective_matrix = cv2.getPerspectiveTransform(src, dst)
-        img_protran = cv2.warpPerspective(imgOrig, projective_matrix, (num_cols,num_rows))
+        projective_matrix = cv2.getPerspectiveTransform(src_mat, dst_mat)
+        img_protran = cv2.warpPerspective(imgOrig, projective_matrix, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
 
         # affine rotation transformation
         rot_mat = cv2.getRotationMatrix2D(center, angle, scale=1)
-        img_protran = cv2.warpAffine(img_protran, rot_mat, (img_protran.shape[1], img_protran.shape[0]), borderMode = cv2.BORDER_REPLICATE)
+        img_protran = cv2.warpAffine(img_protran, rot_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
 
         filepath_trans = 'out/trans{}_{}.jpg'.format(i, int(objID))
         img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
 
         aTrans = coordCalc([dstLL, dstLR, dstUL, dstUR], angle, center, num_rows)
         img.crop((aTrans[0], aTrans[1], aTrans[2], aTrans[3])).save(filepath_trans)  # crop, save
-        #img.crop((min(dstLL[0], dstUL[0]), min(dstUL[1], dstUR[1]), max(dstLR[0], dstUR[0]), max(dstLL[1], dstLR[1]))).save(filepath_trans)  # crop, save
+
+        # inverse matrices
+        """inv_trans_mat = cv2.getPerspectiveTransform(dst_mat, src_mat)
+        inv_rot_mat = cv2.invertAffineTransform(rot_mat)
+
+        img_protran = cv2.warpAffine(img_protran, inv_rot_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
+        img_protran = cv2.warpPerspective(img_protran, projective_matrix, (num_cols,num_rows), cv2.WARP_INVERSE_MAP)
+
+        filepath_trans = 'out/invtrans{}_{}.jpg'.format(i, int(objID))
+        img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
+
+        imgCropOrig = img.crop((x_min, y_min, x_max, y_max)).save(filepath_trans)"""
     
     if i == FRAMES - 1:
         break
