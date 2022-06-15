@@ -1,7 +1,6 @@
 ## Fynn Young
 ## Random Homography Transformations
 # TODO add shear transformations
-# TODO fix coords for rotation
 
 from PIL import Image
 import cv2
@@ -15,7 +14,7 @@ SET_NAME = 'ADL-Rundle-6'
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 
 FRAMES = 2
-SHIFT = 100
+SHIFT = 90
 
 def randomChoice(factor):
     arr = []
@@ -66,7 +65,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         objID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5] # coords of original image
         factor = (((x_max-x_min)*(y_max-y_min))/totalA)*1.5
         center = ((x_max+x_min)//2, (y_max+y_min)//2)
-        angle = random.randint(-90, 90)
+        angle = random.randint(-80, 80)
         # get randomised dest coords
         dstLL = [x_min+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
         dstLR = [x_max+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
@@ -86,7 +85,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
 
         # affine rotation transformation
         rot_mat = cv2.getRotationMatrix2D(center, angle, scale=1)
-        img_protran = cv2.warpAffine(img_protran, rot_mat, (img_protran.shape[1], img_protran.shape[0]))
+        img_protran = cv2.warpAffine(img_protran, rot_mat, (img_protran.shape[1], img_protran.shape[0]), borderMode = cv2.BORDER_REPLICATE)
 
         filepath_trans = 'out/trans{}_{}.jpg'.format(i, int(objID))
         img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
