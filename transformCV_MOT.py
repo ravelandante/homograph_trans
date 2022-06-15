@@ -1,6 +1,7 @@
 ## Fynn Young
 ## Random Homography Transformations
-# TODO add rotation/shear transformations
+# TODO add shear transformations
+# TODO fix coords for rotation
 
 from PIL import Image
 import cv2
@@ -18,17 +19,31 @@ SHIFT = 100
 
 def randomChoice(factor):
     arr = []
-    prob = 1
-    for i in range(4):
-        ran = np.random.choice([0, 1, 2], p=[prob/3, prob/3, prob/3], size=1)
-        if ran[0] == 0:
-            arr.append([factor*random.uniform(-SHIFT, SHIFT), 0])
-        elif ran[0] == 1:
-            arr.append([0, factor*random.uniform(-SHIFT, SHIFT)])
-        elif ran[0] == 2:
-            arr.append([0, 0])
+    ran = np.random.randint(0, 2)
+    if ran == 0:
+        arr = [factor*random.uniform(-SHIFT, SHIFT), 0]
+    elif ran == 1:
+        arr = [0, factor*random.uniform(-SHIFT, SHIFT)]
+    elif ran == 2:
+        arr = [0, 0]
     return arr
 
+# calc new coords for crop after rotation
+def coordCalc(bounds, angle, center, height):
+    angle = angle*np.pi/180
+    crop = []
+    center_x = center[0]
+    center_y = height - center[1]
+    for coord in bounds:
+        x = coord[0] - center_x
+        y = height - coord[1] - center_y
+        coord[0] = center_x + y*np.sin(angle) + x*np.cos(angle)
+        coord[1] = height - (center_y + y*np.cos(angle) - x*np.sin(angle))
+    crop.append(min(bounds[0][0], bounds[2][0]))
+    crop.append(min(bounds[2][1], bounds[3][1]))
+    crop.append(max(bounds[1][0], bounds[3][0]))
+    crop.append(max(bounds[0][1], bounds[1][1]))
+    return crop
 
 gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')
 gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
@@ -53,26 +68,32 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         center = ((x_max+x_min)//2, (y_max+y_min)//2)
         angle = random.randint(-90, 90)
         # get randomised dest coords
-        trans = randomChoice(factor)
+        dstLL = [x_min+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
+        dstLR = [x_max+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
+        dstUL = [x_min+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
+        dstUR = [x_max+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
 
         filepath_orig = 'out/norm{}_{}.jpg'.format(i, int(objID))
         imgCropOrig = imgPIL.crop((x_min, y_min, x_max, y_max)) # crop, save original image
         imgCropOrig.save(filepath_orig)
 
-        # perform projective transformation
-        src = np.float32([[x_min, y_min], [x_max, y_min], [x_min, y_max], [x_max, y_max]])
-        dst = np.float32([[x_min+trans[0][0], y_min+trans[0][1]], [x_max+trans[1][0], y_min+trans[1][1]],
-                        [x_min+trans[2][0], y_max+trans[2][1]], [x_max+trans[3][0], y_max+trans[3][1]]])
+        # projective transformation (warp)
+        src = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
+        dst = np.float32([dstLL, dstLR, dstUL, dstUR])
 
         projective_matrix = cv2.getPerspectiveTransform(src, dst)
         img_protran = cv2.warpPerspective(imgOrig, projective_matrix, (num_cols,num_rows))
+
+        # affine rotation transformation
         rot_mat = cv2.getRotationMatrix2D(center, angle, scale=1)
         img_protran = cv2.warpAffine(img_protran, rot_mat, (img_protran.shape[1], img_protran.shape[0]))
 
         filepath_trans = 'out/trans{}_{}.jpg'.format(i, int(objID))
         img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
-        img.crop((min(x_min+trans[0][0], x_min+trans[2][0]), min(y_min+trans[0][1], y_min+trans[1][1]),
-                max(x_max+trans[1][0], x_max+trans[3][0]), max(y_max+trans[2][1], y_max+trans[3][1]))).save(filepath_trans)  # crop, save
+
+        aTrans = coordCalc([dstLL, dstLR, dstUL, dstUR], angle, center, num_rows)
+        img.crop((aTrans[0], aTrans[1], aTrans[2], aTrans[3])).save(filepath_trans)  # crop, save
+        #img.crop((min(dstLL[0], dstUL[0]), min(dstUL[1], dstUR[1]), max(dstLR[0], dstUR[0]), max(dstLL[1], dstLR[1]))).save(filepath_trans)  # crop, save
     
     if i == FRAMES - 1:
         break
