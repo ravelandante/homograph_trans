@@ -30,7 +30,7 @@ def randomChoice(factor):
 
 
 # calc new coords for crop after rotation
-def coordCalc(bounds, angle, center, height):
+def coordCalc(bounds, angle, center, width, height):
     angle = angle*np.pi/180
     crop = []
     center_x = center[0]
@@ -40,6 +40,15 @@ def coordCalc(bounds, angle, center, height):
         y = height - coord[1] - center_y
         coord[0] = center_x + y*np.sin(angle) + x*np.cos(angle)
         coord[1] = height - (center_y + y*np.cos(angle) - x*np.sin(angle))
+        # check and correct if out of bounds
+        if coord[0] > width:
+            coord[0] -= coord[0] - width
+        elif coord[0] < 0:
+            coord[0] += -(coord[0])
+        if coord[1] > height:
+            coord[1] -= coord[1] - height
+        elif coord[1] < 0:
+            coord[1] += -(coord[1])
     crop.append(min(bounds[0][0], bounds[2][0]))
     crop.append(min(bounds[2][1], bounds[3][1]))
     crop.append(max(bounds[1][0], bounds[3][0]))
@@ -94,7 +103,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         filepath_trans = 'out/trans{}_{}.jpg'.format(i, int(objID))
         img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
 
-        aTrans = coordCalc([dstLL, dstLR, dstUL, dstUR], angle, center, num_rows)
+        aTrans = coordCalc([dstLL, dstLR, dstUL, dstUR], angle, center, num_cols, num_rows)
         img.crop((aTrans[0], aTrans[1], aTrans[2], aTrans[3])).save(filepath_trans)  # crop, save
 
         # inverse matrices
