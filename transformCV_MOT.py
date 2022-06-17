@@ -11,7 +11,7 @@ import random
 SET_NAME = 'ADL-Rundle-6'
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 
-FRAMES = 2
+FRAMES = 50
 SHIFT = 80
 OUT_SIZE = 512
 
@@ -29,7 +29,7 @@ def randomChoice(factor):
 
 
 # calc new coords for crop after rotation
-def coordCalc(bounds, angle, center, width, height):
+def coordCalc(bounds, angle, center, height):
     angle = angle*np.pi/180
     crop = []
     center_x = center[0]
@@ -49,6 +49,7 @@ gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')
 gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
 
 for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
+    print('FRAME', i + 1)
     imgPath = BASE_PATH + '/img1/{:06}.jpg'.format(i + 1)
 
     imgOrig = cv2.imread(imgPath)
@@ -62,17 +63,17 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
 
     for row in gt[i]:
         objID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5] # coords of original image
-        factor = (((x_max-x_min)*(y_max-y_min))/totalA)*1.5
-        center = ((x_max+x_min)//2, (y_max+y_min)//2)
+        factor = (((x_max - x_min)*(y_max - y_min))/totalA)*1.5 # factor for random shift calc
+        center = ((x_max + x_min)//2, (y_max + y_min)//2)
         angle = random.randint(-80, 80)
 
         # get randomised dest coords
-        dstLL, dstLR = [x_min+randomChoice(factor)[0], y_max+randomChoice(factor)[1]], [x_max+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
-        dstUL, dstUR = [x_min+randomChoice(factor)[0], y_min+randomChoice(factor)[1]], [x_max+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
+        dst_LL, dst_LR = [x_min+randomChoice(factor)[0], y_max+randomChoice(factor)[1]], [x_max+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
+        dst_UL, dst_UR = [x_min+randomChoice(factor)[0], y_min+randomChoice(factor)[1]], [x_max+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
 
         # projective transformation (warp)
         src_mat = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
-        dst_mat = np.float32([dstLL, dstLR, dstUL, dstUR])
+        dst_mat = np.float32([dst_LL, dst_LR, dst_UL, dst_UR])
 
         projective_matrix = cv2.getPerspectiveTransform(src_mat, dst_mat)
         img_protran = cv2.warpPerspective(imgOrig, projective_matrix, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
@@ -81,85 +82,84 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         rot_mat = cv2.getRotationMatrix2D(center, angle, scale=1)
         img_protran = cv2.warpAffine(img_protran, rot_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
 
-        filepath_trans = 'out/trans{}_{}.jpg'.format(i, int(objID))
+        bounds = coordCalc([dst_LL, dst_LR, dst_UL, dst_UR], angle, center, num_rows)
 
-        aTrans = coordCalc([dstLL, dstLR, dstUL, dstUR], angle, center, num_cols, num_rows)
-
-        width, height = aTrans[2] - aTrans[0], aTrans[3] - aTrans[1]
+        width, height = bounds[2] - bounds[0], bounds[3] - bounds[1]
         padding = 0
-        mu = [0, 0, 0, 0]
+        pad_lst = [0, 0, 0, 0]
 
         if width < height:
             padding = int((height - width)/2)
-            m = height - width - 2*padding  # makeup
             # if passing left with padding
-            if aTrans[0] - padding <= 0:
+            if bounds[0] - padding <= 0:
                 # if passing left without padding
-                if aTrans[0] <= 0:
-                    mu[0] = 0
-                    mu[2] = 2*padding - aTrans[0] + m
+                if bounds[0] <= 0:
+                    pad_lst[0] = bounds[0]
+                    pad_lst[2] = 2*padding - bounds[0]
                 else:
-                    mu[0] = -(aTrans[0])
-                    mu[2] = 2*padding - mu[0] + m
+                    pad_lst[0] = -(bounds[0])
+                    pad_lst[2] = 2*padding - pad_lst[0]
             else:
-                mu[0] = padding
+                pad_lst[0] = padding
             # if passing right with padding
-            if aTrans[2] + padding >= num_cols:
+            if bounds[2] + padding >= num_cols:
                 # if passing right without padding
-                if aTrans[2] >= num_cols:
-                    mu[2] = 0
-                    mu[0] = 2*padding + aTrans[2] - num_cols - m
+                if bounds[2] >= num_cols:
+                    pad_lst[2] = 0
+                    pad_lst[0] = 2*padding + bounds[2] - num_cols
                 else:
-                    mu[2] = num_cols - aTrans[2]
-                    mu[0] = 2*padding - mu[2] - m
-            else:
-                mu[2] = padding
+                    pad_lst[2] = num_cols - bounds[2]
+                    pad_lst[0] = 2*padding - pad_lst[2]
+            elif bounds[0] - padding > 0:
+                pad_lst[2] = padding
             # if passing top without padding
-            if aTrans[1] <= 0:
-                mu[1] = 0
-                mu[3] = -(aTrans[1])
+            if bounds[1] <= 0:
+                pad_lst[1] = bounds[1]
+                pad_lst[3] = -(bounds[1])
             # if passing bottom without padding
-            if aTrans[3] >= num_rows:
-                mu[3] = 0
-                mu[1] = aTrans[3] - num_rows
+            elif bounds[3] >= num_rows:
+                pad_lst[3] = -(bounds[3] - num_rows)
+                pad_lst[1] = bounds[3] - num_rows
         elif height < width:
             padding = int((width - height)/2)
-            m = width - height - 2*padding  # makeup
             # if passing top with padding
-            if aTrans[1] - padding <= 0:
+            if bounds[1] - padding <= 0:
                 # if passing top without padding
-                if aTrans[1] <= 0:
-                    mu[1] = 0
-                    mu[3] = 2*padding - aTrans[1] + m
+                if bounds[1] <= 0:
+                    pad_lst[1] = bounds[1]
+                    pad_lst[3] = 2*padding - bounds[1]
                 else:
-                    mu[1] = -(aTrans[1])
-                    mu[3] = 2*padding - mu[1] + m
+                    pad_lst[1] = -(bounds[1])
+                    pad_lst[3] = 2*padding - pad_lst[1]
             else:
-                mu[1] = padding
+                pad_lst[1] = padding
             # if passing bottom with padding
-            if aTrans[3] + padding >= num_rows:
+            if bounds[3] + padding >= num_rows:
                 # if passing bottom without padding
-                if aTrans[3] >= num_rows:
-                    mu[3] = 0
-                    mu[1] = 2*padding + aTrans[3] - num_rows - m
+                if bounds[3] >= num_rows:
+                    pad_lst[3] = 0
+                    pad_lst[1] = 2*padding + bounds[3] - num_rows
                 else:
-                    mu[3] = num_rows - aTrans[3]
-                    mu[1] = 2*padding - mu[3] - m
-            else:
-                mu[3] = padding
+                    pad_lst[3] = num_rows - bounds[3]
+                    pad_lst[1] = 2*padding - pad_lst[3]
+            elif bounds[1] - padding > 0:
+                pad_lst[3] = padding
             # if passing left without padding
-            if aTrans[0] <= 0:
-                mu[0] = 0
-                mu[2] = -(aTrans[0])
+            if bounds[0] <= 0:
+                pad_lst[0] = bounds[0]
+                pad_lst[2] = -(bounds[0])
             # if passing right without padding
-            if aTrans[2] >= num_cols:
-                mu[2] = 0
-                mu[0] = aTrans[2] - num_cols
+            elif bounds[2] >= num_cols:
+                pad_lst[2] = -(bounds[2] - num_cols)
+                pad_lst[0] = bounds[2] - num_cols
 
-        img_protran = img_protran[aTrans[1]-mu[1]:aTrans[3]+mu[3], aTrans[0]-mu[0]:aTrans[2]+mu[2]] # crop
-        fx = (OUT_SIZE/width) if (width > height) else (OUT_SIZE/height)
-        img_protran = cv2.resize(img_protran, (0, 0), fx=fx, fy=fx)
+        img_protran = img_protran[bounds[1]-pad_lst[1]:bounds[3]+pad_lst[3], bounds[0]-pad_lst[0]:bounds[2]+pad_lst[2]] # crop
 
+        width, height, dims = img_protran.shape
+        fx, fy = OUT_SIZE/width, OUT_SIZE/height
+        img_protran = cv2.resize(img_protran, (512, 512), fx=fx, fy=fy) # scale up to OUT_SIZE
+
+        filepath_trans = 'out/trans{}_{}.jpg'.format(i, int(objID))
         cv2.imwrite(filepath_trans, img_protran)
 
         # inverse matrices (outdated PIL conversion and crop)
