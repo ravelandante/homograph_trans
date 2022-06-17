@@ -1,7 +1,6 @@
 ## Fynn Young
 ## Random Homography Transformations
 
-from PIL import Image
 import cv2
 import os
 
@@ -62,7 +61,7 @@ gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
 for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
     imgPath = BASE_PATH + '/img1/{:06}.jpg'.format(i + 1)
 
-    imgOrig = cv2.cvtColor(cv2.imread(imgPath), cv2.COLOR_BGR2RGB)
+    imgOrig = cv2.imread(imgPath)
     #imgPIL = Image.open(imgPath)
     num_rows, num_cols = imgOrig.shape[:2]
     totalA = 0
@@ -79,10 +78,8 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         angle = random.randint(-80, 80)
 
         # get randomised dest coords
-        dstLL = [x_min+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
-        dstLR = [x_max+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
-        dstUL = [x_min+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
-        dstUR = [x_max+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
+        dstLL, dstLR = [x_min+randomChoice(factor)[0], y_max+randomChoice(factor)[1]], [x_max+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
+        dstUL, dstUR = [x_min+randomChoice(factor)[0], y_min+randomChoice(factor)[1]], [x_max+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
 
         #filepath_orig = 'out/norm{}_{}.jpg'.format(i, int(objID))
         #imgCropOrig = imgPIL.crop((x_min, y_min, x_max, y_max)) # crop, save original image
@@ -102,18 +99,17 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         filepath_trans = 'out/trans{}_{}.jpg'.format(i, int(objID))
 
         aTrans = coordCalc([dstLL, dstLR, dstUL, dstUR], angle, center, num_cols, num_rows)
-        width = aTrans[2] - aTrans[0]
-        height = aTrans[3] - aTrans[1]
-        img_protran = img_protran[aTrans[1]:aTrans[3], aTrans[0]:aTrans[2]]
-        cv2.imshow("cropped", img_protran)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
 
-        #img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
-        #img.crop((aTrans[0], aTrans[1], aTrans[2], aTrans[3])).save(filepath_trans)  # crop, save
+        width, height = aTrans[2] - aTrans[0], aTrans[3] - aTrans[1]
+
+        padding = int((width - height)/2) if (width > height) else int((height - width)/2)
+        m = (width - height - 2*padding) if (width > height) else (height - width - 2*padding) # makeup
+        img_protran = img_protran[aTrans[1]-padding:aTrans[3]+padding+m, aTrans[0]:aTrans[2]] if (width > height) else img_protran[aTrans[1]:aTrans[3], aTrans[0]-padding:aTrans[2]+padding+m]
+
         fx = (512/width) if (width > height) else (512/height)
-
         img_protran = cv2.resize(img_protran, (0, 0), fx=fx, fy=fx)
+
+        cv2.imwrite(filepath_trans, img_protran)
 
         # inverse matrices
         """inv_trans_mat = cv2.getPerspectiveTransform(dst_mat, src_mat)
