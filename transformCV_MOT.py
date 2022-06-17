@@ -40,20 +40,6 @@ def coordCalc(bounds, angle, center, width, height):
         # rotation calc
         coord[0] = center_x + y*np.sin(angle) + x*np.cos(angle)
         coord[1] = height - (center_y + y*np.cos(angle) - x*np.sin(angle))
-        # check and correct if out of bounds
-        """pad = [0, 0]
-        if coord[0] > width:
-            coord[0] -= coord[0] - width
-            pad = [3, coord[0]]
-        elif coord[0] < 0:
-            coord[0] += -(coord[0])
-            pad = [1, coord[0]]
-        if coord[1] > height:
-            coord[1] -= coord[1] - height
-            pad = [3, coord[1]]
-        elif coord[1] < 0:
-            coord[1] += -(coord[1])
-            pad = [2, coord[1]]"""
     crop.extend([int(min(bounds[0][0], bounds[2][0])), int(min(bounds[2][1], bounds[3][1])),
                 int(max(bounds[1][0], bounds[3][0])), int(max(bounds[0][1], bounds[1][1]))])
     return crop
@@ -111,10 +97,10 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
                 # if passing left without padding
                 if aTrans[0] <= 0:
                     mu[0] = 0
-                    mu[2] = 2*padding - aTrans[0]
+                    mu[2] = 2*padding - aTrans[0] + m
                 else:
                     mu[0] = -(aTrans[0])
-                    mu[2] = 2*padding - mu[0]
+                    mu[2] = 2*padding - mu[0] + m
             else:
                 mu[0] = padding
             # if passing right with padding
@@ -122,10 +108,10 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
                 # if passing right without padding
                 if aTrans[2] >= num_cols:
                     mu[2] = 0
-                    mu[0] = 2*padding + aTrans[2] - num_cols
+                    mu[0] = 2*padding + aTrans[2] - num_cols - m
                 else:
                     mu[2] = num_cols - aTrans[2]
-                    mu[0] = 2*padding - mu[2]
+                    mu[0] = 2*padding - mu[2] - m
             else:
                 mu[2] = padding
             # if passing top without padding
@@ -144,10 +130,10 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
                 # if passing top without padding
                 if aTrans[1] <= 0:
                     mu[1] = 0
-                    mu[3] = 2*padding - aTrans[1]
+                    mu[3] = 2*padding - aTrans[1] + m
                 else:
                     mu[1] = -(aTrans[1])
-                    mu[3] = 2*padding - mu[1]
+                    mu[3] = 2*padding - mu[1] + m
             else:
                 mu[1] = padding
             # if passing bottom with padding
@@ -155,10 +141,10 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
                 # if passing bottom without padding
                 if aTrans[3] >= num_rows:
                     mu[3] = 0
-                    mu[1] = 2*padding + aTrans[3] - num_rows
+                    mu[1] = 2*padding + aTrans[3] - num_rows - m
                 else:
                     mu[3] = num_rows - aTrans[3]
-                    mu[1] = 2*padding - mu[3]
+                    mu[1] = 2*padding - mu[3] - m
             else:
                 mu[3] = padding
             # if passing left without padding
@@ -170,10 +156,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
                 mu[2] = 0
                 mu[0] = aTrans[2] - num_cols
 
-        print(width, height, aTrans[0], aTrans[2], padding)
-        print(mu)
         img_protran = img_protran[aTrans[1]-mu[1]:aTrans[3]+mu[3], aTrans[0]-mu[0]:aTrans[2]+mu[2]] # crop
-        #img_protran = img_protran[aTrans[1]-padding:aTrans[3]+padding+m, aTrans[0]:aTrans[2]] if (width > height) else img_protran[aTrans[1]:aTrans[3], aTrans[0]-padding:aTrans[2]+padding+m]
         fx = (OUT_SIZE/width) if (width > height) else (OUT_SIZE/height)
         img_protran = cv2.resize(img_protran, (0, 0), fx=fx, fy=fx)
 
