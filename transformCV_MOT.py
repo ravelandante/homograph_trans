@@ -1,6 +1,5 @@
 ## Fynn Young
 ## Random Homography Transformations
-# TODO add shear transformations
 
 from PIL import Image
 import cv2
@@ -38,6 +37,7 @@ def coordCalc(bounds, angle, center, width, height):
     for coord in bounds:
         x = coord[0] - center_x
         y = height - coord[1] - center_y
+        # rotation calc
         coord[0] = center_x + y*np.sin(angle) + x*np.cos(angle)
         coord[1] = height - (center_y + y*np.cos(angle) - x*np.sin(angle))
         # check and correct if out of bounds
@@ -49,10 +49,10 @@ def coordCalc(bounds, angle, center, width, height):
             coord[1] -= coord[1] - height
         elif coord[1] < 0:
             coord[1] += -(coord[1])
-    crop.append(min(bounds[0][0], bounds[2][0]))
-    crop.append(min(bounds[2][1], bounds[3][1]))
-    crop.append(max(bounds[1][0], bounds[3][0]))
-    crop.append(max(bounds[0][1], bounds[1][1]))
+    crop.append(int(min(bounds[0][0], bounds[2][0])))
+    crop.append(int(min(bounds[2][1], bounds[3][1])))
+    crop.append(int(max(bounds[1][0], bounds[3][0])))
+    crop.append(int(max(bounds[0][1], bounds[1][1])))
     return crop
 
 
@@ -71,7 +71,6 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
     for row in gt[i]:
         x_min, y_min, x_max, y_max = row[2], row[3], row[2] + row[4], row[3] + row[5]
         totalA += (x_max-x_min)*(y_max-y_min)
-
 
     for row in gt[i]:
         objID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5] # coords of original image
@@ -101,10 +100,20 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         img_protran = cv2.warpAffine(img_protran, rot_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
 
         filepath_trans = 'out/trans{}_{}.jpg'.format(i, int(objID))
-        img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
 
         aTrans = coordCalc([dstLL, dstLR, dstUL, dstUR], angle, center, num_cols, num_rows)
-        img.crop((aTrans[0], aTrans[1], aTrans[2], aTrans[3])).save(filepath_trans)  # crop, save
+        width = aTrans[2] - aTrans[0]
+        height = aTrans[3] - aTrans[1]
+        img_protran = img_protran[aTrans[1]:aTrans[3], aTrans[0]:aTrans[2]]
+        cv2.imshow("cropped", img_protran)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+        #img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
+        #img.crop((aTrans[0], aTrans[1], aTrans[2], aTrans[3])).save(filepath_trans)  # crop, save
+        fx = (512/width) if (width > height) else (512/height)
+
+        img_protran = cv2.resize(img_protran, (0, 0), fx=fx, fy=fx)
 
         # inverse matrices
         """inv_trans_mat = cv2.getPerspectiveTransform(dst_mat, src_mat)
