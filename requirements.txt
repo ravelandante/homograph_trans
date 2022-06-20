@@ -1,10 +1,7 @@
 numpy
+matplotlib
+opencv-python
 torch
 torchvision
-matplotlib
-scikit-image
-opencv-python
 pandas
-pyyaml
-tqdm
-seaborn
+scikit-image
