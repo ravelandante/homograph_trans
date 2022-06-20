@@ -15,43 +15,17 @@ FRAMES = 1
 SHIFT = 80
 OUT_SIZE = 512
 
-np.random.seed(2)
+np.random.seed(146)
 
 
 def randomShift(factor):
     arr = []
-    ran = np.random.randint(0, 2)
+    ran = np.random.randint(0, 1)
     if ran == 0:
         arr = [factor*np.random.uniform(-SHIFT, SHIFT), 0]
     elif ran == 1:
         arr = [0, factor*np.random.uniform(-SHIFT, SHIFT)]
-    elif ran == 2:
-        arr = [0, 0]
     return arr
-
-
-def randomCorners(width, height, factor=0.5):
-    half_height = height // 2
-    half_width = width // 2
-    top_left = [
-        random.randint(0, int(factor * half_width) + 1),
-        random.randint(0, int(factor * half_height) + 1)
-    ]
-    top_right = [
-        random.randint(width - int(factor * half_width) - 1, width),
-        random.randint(0, int(factor * half_height) + 1)
-    ]
-    bot_right = [
-        random.randint(width - int(factor * half_width) - 1, width),
-        random.randint(height - int(factor * half_height) - 1, height)
-    ]
-    bot_left = [
-        random.randint(0, int(factor * half_width) + 1),
-        random.randint(height - int(factor * half_height) - 1, height)
-    ]
-    endpoints = [top_left, top_right, bot_right, bot_left]
-    return endpoints
-
 
 gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')
 gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
@@ -83,8 +57,6 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         bot_left, bot_right = [x_min+randomShift(factor)[0], y_max+randomShift(factor)[1]], [x_max+randomShift(factor)[0], y_max+randomShift(factor)[1]]
         top_left, top_right = [x_min+randomShift(factor)[0], y_min+randomShift(factor)[1]], [x_max+randomShift(factor)[0], y_min+randomShift(factor)[1]]
 
-        #top_left, top_right, bot_right, bot_left = randomCorners(x_max-x_min, y_max-y_min)
-
         # projective transformation (warp)
         src_mat = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
         dst_mat = np.float32([bot_left, bot_right, top_left, top_right])
@@ -92,17 +64,43 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         proj_mat = cv2.getPerspectiveTransform(src_mat, dst_mat)
         img_protran = cv2.warpPerspective(imgOrig, proj_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
 
-        # affine rotation transformation
-        rot_mat = cv2.getRotationMatrix2D(center, angle, scale=1)
-        img_protran = cv2.warpAffine(img_protran, rot_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
-
         # get new coords after perspective and rotation
         bounds = cv2.perspectiveTransform(np.array([src_mat]), proj_mat)
         bounds = bounds[0].astype(int)
 
-        for j, p in enumerate(bounds):
-            bounds[j] = rot_mat.dot(np.array(tuple(bounds[j]) + (1,)))[:2]
+        # affine rotation transformation
+        rot_mat = cv2.getRotationMatrix2D(center, angle, scale=1)
+        while(True):
+            print('top')
+            for j, p in enumerate(bounds):
+                print('old', bounds[j])
+                while(True):
+                    flag = True
+                    bounds[j] = rot_mat.dot(np.array(tuple(bounds[j]) + (1,)))[:2]
+                    print('new', bounds[j])
+                    if bounds[j][0] > num_cols:
+                        rot_mat[0][2] -= 20
+                        print('here')
+                        flag = False
+                    elif bounds[j][0] < 0:
+                        rot_mat[0][2] += 20
+                        flag = False
+                    elif bounds[j][1] > num_rows:
+                        rot_mat[1][2] -= 20
+                        flag = False
+                    elif bounds[j][1] < 0:
+                        rot_mat[1][2] += 20
+                        flag = False
+                    if flag == True:
+                        break
+            print('perform')
+            for j, p in enumerate(bounds):
+                bounds[j] = rot_mat.dot(np.array(tuple(bounds[j]) + (1,)))[:2]
+            print(bounds)
+            img_protran = cv2.warpAffine(img_protran, rot_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
+            break
 
+        # line drawing
         cv2.line(img_protran, bounds[3], bounds[1], (0, 255, 0), thickness=2)
         cv2.line(img_protran, bounds[2], bounds[0], (0, 255, 0), thickness=2)
         cv2.line(img_protran, bounds[2], bounds[3], (0, 255, 0), thickness=2)
@@ -187,7 +185,6 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         img_protran = cv2.resize(img_protran, (OUT_SIZE, OUT_SIZE), fx=fx, fy=fy) # scale up to OUT_SIZE
 
         filepath_trans = 'out/trans{}_{}.jpg'.format(i + 1, int(objID))
-        #if objID == 1:
         cv2.imwrite(filepath_trans, img_protran)
 
         # inverse matrices (outdated PIL conversion and crop)
@@ -196,10 +193,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
 
         rot_row = np.array([0,0,1])
         inv_rot_mat = np.vstack((inv_rot_mat, rot_row))
-        print('TRANS', inv_trans_mat, '\n')
-        print('ROT', inv_rot_mat, '\n')
         final_inv_mat = np.multiply(inv_trans_mat, inv_rot_mat)
-        print('FINAL', final_inv_mat, '\n\n')
 
         img_protran = cv2.warpAffine(img_protran, inv_rot_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
         img_protran = cv2.warpPerspective(img_protran, proj_mat, (num_cols,num_rows), cv2.WARP_INVERSE_MAP)
@@ -208,6 +202,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
 
         imgCropOrig = img.crop((x_min, y_min, x_max, y_max)).save(filepath_trans)"""
-    
+        if objID == 1:
+            break
     if i == FRAMES - 1:
         break
