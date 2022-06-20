@@ -12,7 +12,7 @@ torch.manual_seed(0)
 torch.cuda.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 
-class TinyData(Dataset):
+class MOTData(Dataset):
     def __init__(self, setname):
         self.setname = setname
         assert setname in ['train','val','test']
