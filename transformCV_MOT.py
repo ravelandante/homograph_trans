@@ -11,38 +11,46 @@ import random
 SET_NAME = 'ADL-Rundle-6'
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 
-FRAMES = 50
+FRAMES = 1
 SHIFT = 80
 OUT_SIZE = 512
 
+np.random.seed(2)
 
-def randomChoice(factor):
+
+def randomShift(factor):
     arr = []
     ran = np.random.randint(0, 2)
     if ran == 0:
-        arr = [factor*random.uniform(-SHIFT, SHIFT), 0]
+        arr = [factor*np.random.uniform(-SHIFT, SHIFT), 0]
     elif ran == 1:
-        arr = [0, factor*random.uniform(-SHIFT, SHIFT)]
+        arr = [0, factor*np.random.uniform(-SHIFT, SHIFT)]
     elif ran == 2:
         arr = [0, 0]
     return arr
 
 
-# calc new coords for crop after rotation
-def coordCalc(bounds, angle, center, height):
-    angle = angle*np.pi/180
-    crop = []
-    center_x = center[0]
-    center_y = height - center[1]
-    for coord in bounds:
-        x = coord[0] - center_x
-        y = height - coord[1] - center_y
-        # rotation calc
-        coord[0] = center_x + y*np.sin(angle) + x*np.cos(angle)
-        coord[1] = height - (center_y + y*np.cos(angle) - x*np.sin(angle))
-    crop.extend([int(min(bounds[0][0], bounds[2][0])), int(min(bounds[2][1], bounds[3][1])),
-                int(max(bounds[1][0], bounds[3][0])), int(max(bounds[0][1], bounds[1][1]))])
-    return crop
+def randomCorners(width, height, factor=0.5):
+    half_height = height // 2
+    half_width = width // 2
+    top_left = [
+        random.randint(0, int(factor * half_width) + 1),
+        random.randint(0, int(factor * half_height) + 1)
+    ]
+    top_right = [
+        random.randint(width - int(factor * half_width) - 1, width),
+        random.randint(0, int(factor * half_height) + 1)
+    ]
+    bot_right = [
+        random.randint(width - int(factor * half_width) - 1, width),
+        random.randint(height - int(factor * half_height) - 1, height)
+    ]
+    bot_left = [
+        random.randint(0, int(factor * half_width) + 1),
+        random.randint(height - int(factor * half_height) - 1, height)
+    ]
+    endpoints = [top_left, top_right, bot_right, bot_left]
+    return endpoints
 
 
 gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')
@@ -65,24 +73,43 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         objID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5] # coords of original image
         factor = (((x_max - x_min)*(y_max - y_min))/totalA)*1.5 # factor for random shift calc
         center = ((x_max + x_min)//2, (y_max + y_min)//2)
-        angle = random.randint(-80, 80)
+        angle = np.random.randint(-80, 80)
+
+        """imgNew = imgOrig[int(y_min):int(y_max), int(x_min):int(x_max)]
+        cv2.imshow('image', imgNew)
+        cv2.waitKey(0)"""
 
         # get randomised dest coords
-        dst_LL, dst_LR = [x_min+randomChoice(factor)[0], y_max+randomChoice(factor)[1]], [x_max+randomChoice(factor)[0], y_max+randomChoice(factor)[1]]
-        dst_UL, dst_UR = [x_min+randomChoice(factor)[0], y_min+randomChoice(factor)[1]], [x_max+randomChoice(factor)[0], y_min+randomChoice(factor)[1]]
+        bot_left, bot_right = [x_min+randomShift(factor)[0], y_max+randomShift(factor)[1]], [x_max+randomShift(factor)[0], y_max+randomShift(factor)[1]]
+        top_left, top_right = [x_min+randomShift(factor)[0], y_min+randomShift(factor)[1]], [x_max+randomShift(factor)[0], y_min+randomShift(factor)[1]]
+
+        #top_left, top_right, bot_right, bot_left = randomCorners(x_max-x_min, y_max-y_min)
 
         # projective transformation (warp)
         src_mat = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
-        dst_mat = np.float32([dst_LL, dst_LR, dst_UL, dst_UR])
+        dst_mat = np.float32([bot_left, bot_right, top_left, top_right])
 
-        projective_matrix = cv2.getPerspectiveTransform(src_mat, dst_mat)
-        img_protran = cv2.warpPerspective(imgOrig, projective_matrix, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
+        proj_mat = cv2.getPerspectiveTransform(src_mat, dst_mat)
+        img_protran = cv2.warpPerspective(imgOrig, proj_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
 
         # affine rotation transformation
         rot_mat = cv2.getRotationMatrix2D(center, angle, scale=1)
         img_protran = cv2.warpAffine(img_protran, rot_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
 
-        bounds = coordCalc([dst_LL, dst_LR, dst_UL, dst_UR], angle, center, num_rows)
+        # get new coords after perspective and rotation
+        bounds = cv2.perspectiveTransform(np.array([src_mat]), proj_mat)
+        bounds = bounds[0].astype(int)
+
+        for j, p in enumerate(bounds):
+            bounds[j] = rot_mat.dot(np.array(tuple(bounds[j]) + (1,)))[:2]
+
+        cv2.line(img_protran, bounds[3], bounds[1], (0, 255, 0), thickness=2)
+        cv2.line(img_protran, bounds[2], bounds[0], (0, 255, 0), thickness=2)
+        cv2.line(img_protran, bounds[2], bounds[3], (0, 255, 0), thickness=2)
+        cv2.line(img_protran, bounds[1], bounds[0], (0, 255, 0), thickness=2)
+
+        bounds = [min(bounds[0][0], bounds[2][0]), min(bounds[2][1], bounds[3][1]),
+                max(bounds[1][0], bounds[3][0]), max(bounds[0][1], bounds[1][1])]
 
         width, height = bounds[2] - bounds[0], bounds[3] - bounds[1]
         padding = 0
@@ -152,22 +179,30 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
             elif bounds[2] >= num_cols:
                 pad_lst[2] = -(bounds[2] - num_cols)
                 pad_lst[0] = bounds[2] - num_cols
-
+        
         img_protran = img_protran[bounds[1]-pad_lst[1]:bounds[3]+pad_lst[3], bounds[0]-pad_lst[0]:bounds[2]+pad_lst[2]] # crop
 
         width, height, dims = img_protran.shape
         fx, fy = OUT_SIZE/width, OUT_SIZE/height
-        img_protran = cv2.resize(img_protran, (512, 512), fx=fx, fy=fy) # scale up to OUT_SIZE
+        img_protran = cv2.resize(img_protran, (OUT_SIZE, OUT_SIZE), fx=fx, fy=fy) # scale up to OUT_SIZE
 
-        filepath_trans = 'out/trans{}_{}.jpg'.format(i, int(objID))
+        filepath_trans = 'out/trans{}_{}.jpg'.format(i + 1, int(objID))
+        #if objID == 1:
         cv2.imwrite(filepath_trans, img_protran)
 
         # inverse matrices (outdated PIL conversion and crop)
         """inv_trans_mat = cv2.getPerspectiveTransform(dst_mat, src_mat)
         inv_rot_mat = cv2.invertAffineTransform(rot_mat)
 
+        rot_row = np.array([0,0,1])
+        inv_rot_mat = np.vstack((inv_rot_mat, rot_row))
+        print('TRANS', inv_trans_mat, '\n')
+        print('ROT', inv_rot_mat, '\n')
+        final_inv_mat = np.multiply(inv_trans_mat, inv_rot_mat)
+        print('FINAL', final_inv_mat, '\n\n')
+
         img_protran = cv2.warpAffine(img_protran, inv_rot_mat, (num_cols,num_rows), borderMode = cv2.BORDER_REFLECT)
-        img_protran = cv2.warpPerspective(img_protran, projective_matrix, (num_cols,num_rows), cv2.WARP_INVERSE_MAP)
+        img_protran = cv2.warpPerspective(img_protran, proj_mat, (num_cols,num_rows), cv2.WARP_INVERSE_MAP)
 
         filepath_trans = 'out/invtrans{}_{}.jpg'.format(i, int(objID))
         img = Image.fromarray((img_protran).astype(np.uint8)) # convert to PIL image
