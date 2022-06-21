@@ -7,14 +7,14 @@ import os
 import numpy as np
 from numpy import genfromtxt
 
-SET_NAME = 'ADL-Rundle-8'   # name of dataset
+SET_NAME = 'ADL-Rundle-6'   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
 FRAMES = -1         # num of frames to process (-1 to process all)
 SHIFT = 70          # max of random perspective shift for 1 point
 OUT_SIZE = 512
-BOUNDING = False    # whether to draw bounding boxes
+BOUNDING = True    # whether to draw bounding boxes
 
 
 def random_shift(points, factor):
@@ -42,6 +42,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
 
     print('FRAME', i + 1)
 
+
     height, width = img_orig.shape[:2]  # full image dimensions
     t_width = 0
     t_height = 0
@@ -56,6 +57,8 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         obj_ID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5]   # coords of original image
         factor = (((x_max - x_min)/t_width)*1.3, ((y_max - y_min)/t_height)*1.3)                        # factors for random shift calculation (fractions of total width and height)
         angle = np.random.randint(-80, 80)
+
+        img_new = img_orig[int(y_min):int(y_max), int(x_min):int(x_max)]
 
         # translation to box_centre to prevent image corners going past image edges when rotating
         box_centre = ((x_max + x_min)//2, (y_max + y_min)//2)
@@ -85,13 +88,14 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         rot_mat = cv2.getRotationMatrix2D(box_centre, angle, scale=1)
         img_persp = cv2.warpAffine(img_persp, rot_mat, (width,height), borderMode = cv2.BORDER_REFLECT)
 
+
         # get new corner coords after perspective and rotation transformations
         corners = cv2.perspectiveTransform(np.array([src_mat]), persp_mat)      # coords after perspective transform
         corners = corners[0].astype(int)
 
         for j, p in enumerate(corners):
             corners[j] = rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]    # coords after rotation
-                
+
         bounds = [min(corners[0][0], corners[2][0]), min(corners[2][1], corners[3][1]),
                 max(corners[1][0], corners[3][0]), max(corners[0][1], corners[1][1])]
 
@@ -116,6 +120,14 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
                 pad_lst[0] = 2*padding - pad_lst[2]
             elif bounds[0] - padding > 0:
                 pad_lst[2] = padding
+            # if passing left without padding
+            if bounds[0] <= 0:
+                pad_lst[0] = bounds[0]
+                pad_lst[2] = -bounds[0]
+            # if passing right without padding
+            elif bounds[2] >= width:
+                pad_lst[2] = -(bounds[2] - width)
+                pad_lst[0] = bounds[2] - width
             # if passing top without padding
             if bounds[1] <= 0:
                 pad_lst[1] = bounds[1]
@@ -146,7 +158,14 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
             elif bounds[2] >= width:
                 pad_lst[2] = -(bounds[2] - width)
                 pad_lst[0] = bounds[2] - width
-        
+            # if passing top without padding
+            if bounds[1] <= 0:
+                pad_lst[1] = bounds[1]
+                pad_lst[3] = -bounds[1]
+            # if passing bottom without padding
+            elif bounds[3] >= height:
+                pad_lst[3] = -(bounds[3] - height)
+                pad_lst[1] = bounds[3] - height
         # draw bounding boxes
         if BOUNDING:
             points = np.array([corners[3], corners[1], corners[0], corners[2]])
@@ -159,13 +178,13 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         fx, fy = OUT_SIZE/n_width, OUT_SIZE/n_height                            # scaling factors
         img_persp = cv2.resize(img_persp, (OUT_SIZE, OUT_SIZE), fx=fx, fy=fy)   # scale up to OUT_SIZE
 
-        filepath_trans = '{}/trans{}_{}.jpg'.format(SAVE_PATH, i + 1, int(obj_ID))
+        filepath_trans = '{}/{:04}_{:04}.jpg'.format(SAVE_PATH, i + 1, int(obj_ID))
         cv2.imwrite(filepath_trans, img_persp)
 
         with open('load_dataset/MOT_data/MOT_labels.csv', 'a') as f:    # write filenames to csv file for custom dataset
             if i == 0 and obj_ID == 1:
                 f.truncate(14)
-            f.write('\ntrans{}_{}.jpg,[label]'.format(i + 1, int(obj_ID)))
+            f.write('\n{:04}_{:04}.jpg,0'.format(i + 1, int(obj_ID)))
 
         # inverse matrices
         """inv_trans_mat = cv2.getPerspectiveTransform(dst_mat, src_mat)
