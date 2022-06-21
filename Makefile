@@ -6,4 +6,4 @@ clean:
 	rm -rf venv
 	find -iname "*.pyc" -delete
 img:
-	rm ./out/*.jpg
+	rm ./load_dataset/MOT_data/train/*.jpg
