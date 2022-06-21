@@ -1,22 +1,21 @@
 ## Fynn Young
 ## Random Homography Transformations
+# TODO clean padding code (past edge detections obsolete)
 
-from tkinter import Y
 import cv2
 import os
 
 import numpy as np
 from numpy import genfromtxt
-import random
 
 SET_NAME = 'ADL-Rundle-6'
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 
-FRAMES = 1
+FRAMES = 10
 SHIFT = 80
 OUT_SIZE = 512
 
-np.random.seed(155)
+np.random.seed(146)
 
 
 def randomShift(factor):
@@ -64,8 +63,8 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         y_max += y_shift
         centre = ((x_max + x_min)//2, (y_max + y_min)//2)
 
-        """imgNew = img_orig[int(y_min):int(y_max), int(x_min):int(x_max)]
-        cv2.imshow('image', imgNew)
+        """img_new = img_persp[int(y_min):int(y_max), int(x_min):int(x_max)]
+        cv2.imshow('image', img_new)
         cv2.waitKey(0)"""
 
         # get randomised dest coords
@@ -83,7 +82,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         rot_mat = cv2.getRotationMatrix2D(centre, angle, scale=1)
         img_persp = cv2.warpAffine(img_persp, rot_mat, (width,height), borderMode = cv2.BORDER_REFLECT)
 
-        # get new coords after perspective and rotation
+        # get new coords after perspective and rotation transformations
         corners = cv2.perspectiveTransform(np.array([src_mat]), persp_mat)
         corners = corners[0].astype(int)
 
@@ -195,5 +194,6 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         img = Image.fromarray((img_persp).astype(np.uint8)) # convert to PIL image
 
         imgCropOrig = img.crop((x_min, y_min, x_max, y_max)).save(filepath_trans)"""
+        
     if i == FRAMES - 1:
         break
