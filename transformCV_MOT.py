@@ -7,10 +7,11 @@ import os
 import numpy as np
 from numpy import genfromtxt
 
-SET_NAME = 'ADL-Rundle-6'   # name of dataset
+SET_NAME = 'ADL-Rundle-8'   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
+SAVE_PATH = 'load_dataset/MOT_data/train'
 
-FRAMES = 10         # num of frames to process
+FRAMES = -1         # num of frames to process (-1 to process all)
 SHIFT = 70          # max of random perspective shift for 1 point
 OUT_SIZE = 512
 BOUNDING = False    # whether to draw bounding boxes
@@ -64,7 +65,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         trans_mat = np.float32([[1, 0, x_shift], [0, 1, y_shift]])
         img_persp = cv2.warpAffine(img_orig, trans_mat, (width, height), borderMode = cv2.BORDER_REFLECT)
 
-        x_min += x_shift    # realign bounding coords to mew translation
+        x_min += x_shift    # realign bounding coords to new translation
         x_max += x_shift
         y_min += y_shift 
         y_max += y_shift
@@ -158,8 +159,13 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         fx, fy = OUT_SIZE/n_width, OUT_SIZE/n_height                            # scaling factors
         img_persp = cv2.resize(img_persp, (OUT_SIZE, OUT_SIZE), fx=fx, fy=fy)   # scale up to OUT_SIZE
 
-        filepath_trans = 'out/trans{}_{}.jpg'.format(i + 1, int(obj_ID))
+        filepath_trans = '{}/trans{}_{}.jpg'.format(SAVE_PATH, i + 1, int(obj_ID))
         cv2.imwrite(filepath_trans, img_persp)
+
+        with open('load_dataset/MOT_data/MOT_labels.csv', 'a') as f:    # write filenames to csv file for custom dataset
+            if i == 0 and obj_ID == 1:
+                f.truncate(14)
+            f.write('\ntrans{}_{}.jpg,[label]'.format(i + 1, int(obj_ID)))
 
         # inverse matrices
         """inv_trans_mat = cv2.getPerspectiveTransform(dst_mat, src_mat)
