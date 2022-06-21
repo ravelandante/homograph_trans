@@ -11,21 +11,27 @@ from numpy import genfromtxt
 SET_NAME = 'ADL-Rundle-6'
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 
-FRAMES = 10
-SHIFT = 80
+FRAMES = 1
+SHIFT = 70
 OUT_SIZE = 512
+BOUNDING = True
 
-np.random.seed(146)
 
+def randomShift(points, factor):
+    # bot_left
+    points[0][0] += factor[0]*np.random.uniform(0, SHIFT)
+    points[0][1] += factor[1]*np.random.uniform(-SHIFT, SHIFT)
+    # bot_right
+    points[1][0] += factor[0]*np.random.uniform(-SHIFT, 0)
+    points[1][1] += factor[1]*np.random.uniform(-SHIFT, SHIFT)
+    # top_left
+    points[2][0] += factor[0]*np.random.uniform(-SHIFT, -SHIFT/1.5)
+    points[2][1] += factor[1]*np.random.uniform(-SHIFT, -SHIFT/1.5)
+    # top_right
+    points[3][0] += factor[0]*np.random.uniform(SHIFT/1.5, SHIFT)
+    points[3][1] += factor[1]*np.random.uniform(-SHIFT, -SHIFT/1.5)
 
-def randomShift(factor):
-    arr = []
-    ran = np.random.randint(0, 1)
-    if ran == 0:
-        arr = [factor*np.random.uniform(-SHIFT, SHIFT), 0]
-    elif ran == 1:
-        arr = [0, factor*np.random.uniform(-SHIFT, SHIFT)]
-    return arr
+    return points
 
 gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')
 gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
@@ -36,16 +42,18 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
 
     img_orig = cv2.imread(imgPath)
     height, width = img_orig.shape[:2]
-    totalA = 0
+    t_width = 0
+    t_height = 0
 
     # get total area of all boxes for factor calc
     for row in gt[i]:
         x_min, y_min, x_max, y_max = row[2], row[3], row[2] + row[4], row[3] + row[5]
-        totalA += (x_max-x_min)*(y_max-y_min)
+        t_width += x_max-x_min
+        t_height += y_max-y_min
 
     for row in gt[i]:
         objID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5] # coords of original image
-        factor = (((x_max - x_min)*(y_max - y_min))/totalA)*1.5 # factor for random shift calc
+        factor = (((x_max - x_min)/t_width)*1.3, ((y_max - y_min)/t_height)*1.3) # factor for random shift calc
         angle = np.random.randint(-80, 80)
 
         # translation to centre
@@ -63,13 +71,8 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         y_max += y_shift
         centre = ((x_max + x_min)//2, (y_max + y_min)//2)
 
-        """img_new = img_persp[int(y_min):int(y_max), int(x_min):int(x_max)]
-        cv2.imshow('image', img_new)
-        cv2.waitKey(0)"""
-
         # get randomised dest coords
-        bot_left, bot_right = [x_min+randomShift(factor)[0], y_max+randomShift(factor)[1]], [x_max+randomShift(factor)[0], y_max+randomShift(factor)[1]]
-        top_left, top_right = [x_min+randomShift(factor)[0], y_min+randomShift(factor)[1]], [x_max+randomShift(factor)[0], y_min+randomShift(factor)[1]]
+        bot_left, bot_right, top_left, top_right = randomShift([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]], factor)
 
         # perspective transformation (warp)
         src_mat = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
@@ -95,10 +98,10 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         n_width, n_height = bounds[2] - bounds[0], bounds[3] - bounds[1]
 
         # line drawing
-        cv2.line(img_persp, corners[3], corners[1], (0, 255, 0), thickness=2)
-        cv2.line(img_persp, corners[2], corners[0], (0, 255, 0), thickness=2)
-        cv2.line(img_persp, corners[2], corners[3], (0, 255, 0), thickness=2)
-        cv2.line(img_persp, corners[1], corners[0], (0, 255, 0), thickness=2)
+        if BOUNDING:
+            points = np.array([corners[3], corners[1], corners[0], corners[2]])
+            points = points.reshape((-1, 1, 2))
+            cv2.polylines(img_persp, [points], True, (0, 255, 0), thickness=1)
 
         padding = 0
         pad_lst = [0, 0, 0, 0]
