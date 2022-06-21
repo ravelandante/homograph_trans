@@ -17,8 +17,7 @@ class custom_MOT(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        img_name = os.path.join(self.root_dir,
-                                self.data.iloc[idx, 0])
+        img_name = os.path.join(self.root_dir, self.data.iloc[idx, 0])
         image = io.imread(img_name)
         label = self.data.iloc[idx, 1]
         sample = {'image': image, 'label': label}
