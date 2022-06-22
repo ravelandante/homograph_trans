@@ -14,7 +14,9 @@ SAVE_PATH = 'load_dataset/MOT_data/train'
 FRAMES = 22         # num of frames to process (-1 to process all)
 OUT_SIZE = 512
 BOUNDING = True     # whether to draw bounding boxes
-BORDER_MODE = cv2.BORDER_REPLICATE
+
+BORDER_MODE = cv2.BORDER_CONSTANT
+BORDER_VALUE = (127, 127, 127)
 
 #np.random.seed(146)
 
@@ -22,8 +24,8 @@ BORDER_MODE = cv2.BORDER_REPLICATE
 def random_shift(points):
     width = points[1][0] - points[0][0]
     height = points[1][1] - points[2][1]
-    x_shift = 0.2*width
-    y_shift = 0.2*height
+    x_shift = 0.23*width
+    y_shift = 0.23*height
     # bot_left
     points[0][0] += np.random.randint(0, x_shift)
     points[0][1] += np.random.randint(-y_shift/2, y_shift/2)
@@ -60,7 +62,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         x_shift, y_shift = int(img_centre[0] - box_centre[0]), int(img_centre[1] - box_centre[1])
 
         trans_mat = np.float32([[1, 0, x_shift], [0, 1, y_shift]])
-        img_persp = cv2.warpAffine(img_orig, trans_mat, (width, height), borderMode = BORDER_MODE)
+        img_persp = cv2.warpAffine(img_orig, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
         x_min += x_shift    # realign bounding coords to new translation
         x_max += x_shift
@@ -76,11 +78,11 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         dst_mat = np.float32([bot_left, bot_right, top_left, top_right])
 
         persp_mat = cv2.getPerspectiveTransform(src_mat, dst_mat)
-        img_persp = cv2.warpPerspective(img_persp, persp_mat, (width,height), borderMode = BORDER_MODE)
+        img_persp = cv2.warpPerspective(img_persp, persp_mat, (width,height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
         # affine rotation transformation
         rot_mat = cv2.getRotationMatrix2D(box_centre, angle, scale=1)
-        img_persp = cv2.warpAffine(img_persp, rot_mat, (width,height), borderMode = BORDER_MODE)
+        img_persp = cv2.warpAffine(img_persp, rot_mat, (width,height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
         # get new corner coords after perspective and rotation transformations
         corners = cv2.perspectiveTransform(np.array([src_mat]), persp_mat)      # coords after perspective transform
