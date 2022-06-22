@@ -1,6 +1,5 @@
 ## Fynn Young
 ## Random Homograph Image Transformations
-# TODO change what random shift factor is calculated on
 
 import cv2
 import os
@@ -12,12 +11,12 @@ SET_NAME = 'ADL-Rundle-6'   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
-FRAMES = 195         # num of frames to process (-1 to process all)
-SHIFT = 70          # max of random perspective shift for 1 point
+FRAMES = 22         # num of frames to process (-1 to process all)
 OUT_SIZE = 512
-BOUNDING = True    # whether to draw bounding boxes
+BOUNDING = True     # whether to draw bounding boxes
+BORDER_MODE = cv2.BORDER_REPLICATE
 
-np.random.seed(146)
+#np.random.seed(146)
 
 
 def random_shift(points):
@@ -58,10 +57,10 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         # translation to box_centre to prevent image corners going past image edges when rotating
         box_centre = ((x_max + x_min)//2, (y_max + y_min)//2)
         img_centre = (width//2, height//2)
-        x_shift, y_shift = img_centre[0] - box_centre[0], img_centre[1] - box_centre[1]
+        x_shift, y_shift = int(img_centre[0] - box_centre[0]), int(img_centre[1] - box_centre[1])
 
         trans_mat = np.float32([[1, 0, x_shift], [0, 1, y_shift]])
-        img_persp = cv2.warpAffine(img_orig, trans_mat, (width, height), borderMode = cv2.BORDER_REFLECT)
+        img_persp = cv2.warpAffine(img_orig, trans_mat, (width, height), borderMode = BORDER_MODE)
 
         x_min += x_shift    # realign bounding coords to new translation
         x_max += x_shift
@@ -77,18 +76,18 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         dst_mat = np.float32([bot_left, bot_right, top_left, top_right])
 
         persp_mat = cv2.getPerspectiveTransform(src_mat, dst_mat)
-        img_persp = cv2.warpPerspective(img_persp, persp_mat, (width,height), borderMode = cv2.BORDER_REFLECT)
+        img_persp = cv2.warpPerspective(img_persp, persp_mat, (width,height), borderMode = BORDER_MODE)
 
         # affine rotation transformation
-        #rot_mat = cv2.getRotationMatrix2D(box_centre, angle, scale=1)
-        #img_persp = cv2.warpAffine(img_persp, rot_mat, (width,height), borderMode = cv2.BORDER_REFLECT)
+        rot_mat = cv2.getRotationMatrix2D(box_centre, angle, scale=1)
+        img_persp = cv2.warpAffine(img_persp, rot_mat, (width,height), borderMode = BORDER_MODE)
 
         # get new corner coords after perspective and rotation transformations
         corners = cv2.perspectiveTransform(np.array([src_mat]), persp_mat)      # coords after perspective transform
         corners = corners[0].astype(int)
 
-        #for j, p in enumerate(corners):
-        #    corners[j] = rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]    # coords after rotation
+        for j, p in enumerate(corners):
+            corners[j] = rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]    # coords after rotation
 
         bounds = [min(corners[0][0], corners[2][0]), min(corners[2][1], corners[3][1]),
                 max(corners[1][0], corners[3][0]), max(corners[0][1], corners[1][1])]
@@ -100,66 +99,13 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
 
         # padding of arbitrarily sized image to square for scaling to OUT_SIZE
-        if n_width < n_height:
-            padding = int((n_height - n_width)/2)
-            # if passing left with padding
-            if bounds[0] - padding <= 0:
-                pad_lst[0] = -bounds[0]
-                pad_lst[2] = 2*padding - pad_lst[0]
-            else:
-                pad_lst[0] = padding
-            # if passing right with padding
-            if bounds[2] + padding >= width:
-                pad_lst[2] = width - bounds[2]
-                pad_lst[0] = 2*padding - pad_lst[2]
-            elif bounds[0] - padding > 0:
-                pad_lst[2] = padding
-            # if passing left without padding
-            if bounds[0] <= 0:
-                pad_lst[0] = bounds[0]
-                pad_lst[2] = -bounds[0]
-            # if passing right without padding
-            elif bounds[2] >= width:
-                pad_lst[2] = -(bounds[2] - width)
-                pad_lst[0] = bounds[2] - width
-            # if passing top without padding
-            if bounds[1] <= 0:
-                pad_lst[1] = bounds[1]
-                pad_lst[3] = -bounds[1]
-            # if passing bottom without padding
-            elif bounds[3] >= height:
-                pad_lst[3] = -(bounds[3] - height)
-                pad_lst[1] = bounds[3] - height
-        elif n_height < n_width:
+        if n_width > n_height:
             padding = int((n_width - n_height)/2)
-            # if passing top with padding
-            if bounds[1] - padding <= 0:
-                pad_lst[1] = -bounds[1]
-                pad_lst[3] = 2*padding - pad_lst[1]
-            else:
-                pad_lst[1] = padding
-            # if passing bottom with padding
-            if bounds[3] + padding >= height:
-                pad_lst[3] = height - bounds[3]
-                pad_lst[1] = 2*padding - pad_lst[3]
-            elif bounds[1] - padding > 0:
-                pad_lst[3] = padding
-            # if passing left without padding
-            if bounds[0] <= 0:
-                pad_lst[0] = bounds[0]
-                pad_lst[2] = -bounds[0]
-            # if passing right without padding
-            elif bounds[2] >= width:
-                pad_lst[2] = -(bounds[2] - width)
-                pad_lst[0] = bounds[2] - width
-            # if passing top without padding
-            if bounds[1] <= 0:
-                pad_lst[1] = bounds[1]
-                pad_lst[3] = -bounds[1]
-            # if passing bottom without padding
-            elif bounds[3] >= height:
-                pad_lst[3] = -(bounds[3] - height)
-                pad_lst[1] = bounds[3] - height
+            pad_lst = [0, padding, 0, padding]
+        elif n_height > n_width:
+            padding = int((n_height - n_width)/2)
+            pad_lst = [padding, 0, padding, 0]
+
         # draw bounding boxes
         if BOUNDING:
             points = np.array([corners[3], corners[1], corners[0], corners[2]])
