@@ -17,20 +17,26 @@ SHIFT = 70          # max of random perspective shift for 1 point
 OUT_SIZE = 512
 BOUNDING = True    # whether to draw bounding boxes
 
+np.random.seed(146)
 
-def random_shift(points, factor):
+
+def random_shift(points):
+    width = points[1][0] - points[0][0]
+    height = points[1][1] - points[2][1]
+    x_shift = 0.2*width
+    y_shift = 0.2*height
     # bot_left
-    points[0][0] += factor[0]*np.random.uniform(0, SHIFT)
-    points[0][1] += factor[1]*np.random.uniform(-SHIFT, SHIFT)
+    points[0][0] += np.random.randint(0, x_shift)
+    points[0][1] += np.random.randint(-y_shift/2, y_shift/2)
     # bot_right
-    points[1][0] += factor[0]*np.random.uniform(-SHIFT, 0)
-    points[1][1] += factor[1]*np.random.uniform(-SHIFT, SHIFT)
+    points[1][0] += np.random.randint(-x_shift, 0)
+    points[1][1] += np.random.randint(-y_shift/2, y_shift/2)
     # top_left
-    points[2][0] += factor[0]*np.random.uniform(-SHIFT, -SHIFT/1.5)
-    points[2][1] += factor[1]*np.random.uniform(-SHIFT, -SHIFT/1.5)
+    points[2][0] += np.random.randint(-x_shift, 0)
+    points[2][1] += np.random.randint(-y_shift, 0)
     # top_right
-    points[3][0] += factor[0]*np.random.uniform(SHIFT/1.5, SHIFT)
-    points[3][1] += factor[1]*np.random.uniform(-SHIFT, -SHIFT/1.5)
+    points[3][0] += np.random.randint(0, x_shift)
+    points[3][1] += np.random.randint(-y_shift, 0)
     return points
 
 
@@ -44,20 +50,9 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
     print('FRAME', i + 1)
 
     height, width = img_orig.shape[:2]  # full image dimensions
-    t_width = 0
-    t_height = 0
-
-    # get total area of all bounding boxes for shift factor calculation
-    for row in gt[i]:
-        x_min, y_min, x_max, y_max = row[2], row[3], row[2] + row[4], row[3] + row[5]
-        t_width += (x_max - x_min)
-        t_height += (y_max - y_min)
 
     for row in gt[i]:
         obj_ID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5]   # coords of original image
-        if obj_ID != 1:
-            break
-        factor = (((x_max - x_min)/t_width)*1.3, ((y_max - y_min)/t_height)*1.3)                        # factors for random shift calculation (fractions of total width and height)
         angle = np.random.randint(-80, 80)
 
         # translation to box_centre to prevent image corners going past image edges when rotating
@@ -75,7 +70,7 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         box_centre = ((x_max + x_min)//2, (y_max + y_min)//2)
 
         # get randomised dest coords
-        bot_left, bot_right, top_left, top_right = random_shift([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]], factor)
+        bot_left, bot_right, top_left, top_right = random_shift([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
 
         # perspective transformation (warp)
         src_mat = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
