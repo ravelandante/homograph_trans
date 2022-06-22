@@ -1,5 +1,6 @@
 ## Fynn Young
 ## Random Homograph Image Transformations
+# TODO change what random shift factor is calculated on
 
 import cv2
 import os
@@ -11,7 +12,7 @@ SET_NAME = 'ADL-Rundle-6'   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
-FRAMES = -1         # num of frames to process (-1 to process all)
+FRAMES = 195         # num of frames to process (-1 to process all)
 SHIFT = 70          # max of random perspective shift for 1 point
 OUT_SIZE = 512
 BOUNDING = True    # whether to draw bounding boxes
@@ -42,7 +43,6 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
 
     print('FRAME', i + 1)
 
-
     height, width = img_orig.shape[:2]  # full image dimensions
     t_width = 0
     t_height = 0
@@ -50,15 +50,15 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
     # get total area of all bounding boxes for shift factor calculation
     for row in gt[i]:
         x_min, y_min, x_max, y_max = row[2], row[3], row[2] + row[4], row[3] + row[5]
-        t_width += x_max - x_min
-        t_height += y_max - y_min
+        t_width += (x_max - x_min)
+        t_height += (y_max - y_min)
 
     for row in gt[i]:
         obj_ID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5]   # coords of original image
+        if obj_ID != 1:
+            break
         factor = (((x_max - x_min)/t_width)*1.3, ((y_max - y_min)/t_height)*1.3)                        # factors for random shift calculation (fractions of total width and height)
         angle = np.random.randint(-80, 80)
-
-        img_new = img_orig[int(y_min):int(y_max), int(x_min):int(x_max)]
 
         # translation to box_centre to prevent image corners going past image edges when rotating
         box_centre = ((x_max + x_min)//2, (y_max + y_min)//2)
@@ -85,16 +85,15 @@ for i, file in enumerate(os.listdir(BASE_PATH + '/img1')):
         img_persp = cv2.warpPerspective(img_persp, persp_mat, (width,height), borderMode = cv2.BORDER_REFLECT)
 
         # affine rotation transformation
-        rot_mat = cv2.getRotationMatrix2D(box_centre, angle, scale=1)
-        img_persp = cv2.warpAffine(img_persp, rot_mat, (width,height), borderMode = cv2.BORDER_REFLECT)
-
+        #rot_mat = cv2.getRotationMatrix2D(box_centre, angle, scale=1)
+        #img_persp = cv2.warpAffine(img_persp, rot_mat, (width,height), borderMode = cv2.BORDER_REFLECT)
 
         # get new corner coords after perspective and rotation transformations
         corners = cv2.perspectiveTransform(np.array([src_mat]), persp_mat)      # coords after perspective transform
         corners = corners[0].astype(int)
 
-        for j, p in enumerate(corners):
-            corners[j] = rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]    # coords after rotation
+        #for j, p in enumerate(corners):
+        #    corners[j] = rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]    # coords after rotation
 
         bounds = [min(corners[0][0], corners[2][0]), min(corners[2][1], corners[3][1]),
                 max(corners[1][0], corners[3][0]), max(corners[0][1], corners[1][1])]
