@@ -13,14 +13,14 @@ import os
 import numpy as np
 from numpy import genfromtxt
 
-SET_NAME = 'ADL-Rundle-6'   # name of dataset
+SET_NAME = 'ADL-Rundle-6'                   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
-DRAW_BOXES = True       # whether to draw bounding boxes
-DISPLAY = True          # whether to display images at the end of each loop
+DRAW_BOXES = False                           # whether to draw bounding boxes
+DISPLAY = True                              # whether to display images at the end of each loop
 
-FRAMES = 1              # num of frames to process (-1 to process all)
+FRAMES = 1                                  # num of frames to process (-1 to process all)
 IN_SIZE = (512, 512)
 OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
@@ -80,7 +80,10 @@ def centre_shift(bounds, width, height):
     y_min += y_shift
     y_max += y_shift
 
-    return np.float32([[1, 0, x_shift], [0, 1, y_shift]]), [x_min, y_min, x_max, y_max]
+    bounds = [x_min, y_min, x_max, y_max]
+    bounds = [int(c) for c in bounds]
+
+    return np.float32([[1, 0, x_shift], [0, 1, y_shift]]), bounds
 
 
 def calc_edges(corners, out_size=IN_SIZE):
@@ -109,31 +112,32 @@ def calc_edges(corners, out_size=IN_SIZE):
         padding = int((aspect*n_height - n_width)/2)
         pad_lst = [padding, 0, padding, 0]
     
-    return [bounds[0] - pad_lst[0], bounds[1] - pad_lst[1], bounds[2] + pad_lst[2], bounds[3] + pad_lst[3]]
+    crop = [bounds[0] - pad_lst[0], bounds[1] - pad_lst[1], bounds[2] + pad_lst[2], bounds[3] + pad_lst[3]]
+    crop = [int(c) for c in crop]
+    
+    return crop
 
 
-gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')                                                # open/organise ground-truth tracking data
+gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')                                        # open/organise ground-truth tracking data
 gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
 
-for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                                                 # loop through frames
+for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                                         # loop through frames
     img_path = BASE_PATH + '/img1/{:06}.jpg'.format(i + 1)
     img_orig = cv2.imread(img_path)
 
     print('FRAME', i + 1)
 
-    height, width = img_orig.shape[:2]                                                                  # full image dimensions
+    height, width = img_orig.shape[:2]                                                          # full image dimensions
 
-    for row in gt[i]:                                                                                   # loop through detections in frame
+    for row in gt[i]:                                                                           # loop through detections in frame
         bounds = []
         # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
-        obj_ID, bounds = row[1], [row[2], row[3], row[2] + row[4], row[3] + row[5]]   # coords of original image
+        obj_ID, bounds = row[1], [row[2], row[3], row[2] + row[4], row[3] + row[5]]             # coords of original image
         angle = np.random.randint(-80, 80)
-
-        img_new = img_orig[int(bounds[1]):int(bounds[3]), int(bounds[0]):int(bounds[2])]
 
         # translation of bounding box to image centre to prevent rotated image corners getting cut off by image bounds
         trans_mat, bounds = centre_shift(bounds, width, height)
-        img_persp = cv2.warpAffine(img_orig, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
+        img_trans = cv2.warpAffine(img_orig, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
         # get randomised dest coords
         corners, diff = random_shift([[bounds[0], bounds[3]], [bounds[2], bounds[3]], [bounds[0], bounds[1]], [bounds[2], bounds[1]]])
@@ -144,7 +148,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
         dst_mat = np.float32(corners)
 
         persp_mat = cv2.getPerspectiveTransform(src_mat, dst_mat)
-        img_persp = cv2.warpPerspective(img_persp, persp_mat, (width,height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
+        img_persp = cv2.warpPerspective(img_trans, persp_mat, (width,height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
         # affine rotation transform
         rot_mat = cv2.getRotationMatrix2D(((bounds[2] + bounds[0])//2, (bounds[3] + bounds[1])//2), angle, scale=1)
@@ -200,8 +204,14 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
         final_inv_mat = np.dot(inv_persp_mat, inv_rot_mat)                          # dot product to get final inverse matrix
 
         img_rev = cv2.warpPerspective(img_persp, final_inv_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
+        
+        n_bounds = [np.min(src_mat, axis=0)[0], np.min(src_mat, axis=0)[1],         # find new min/max bounds (x_min, y_min, x_max, y_max)
+                    np.max(src_mat, axis=0)[0], np.max(src_mat, axis=0)[1]]
+        
+        trans_mat, n_corners = centre_shift(n_bounds, width, height)
+        img_rev = cv2.warpAffine(img_rev, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
-        crop = calc_edges(corners, OUT_SIZE)                    # calculate padding and bounds
+        crop = calc_edges([[n_corners[0], n_corners[3]], [n_corners[2], n_corners[3]], [n_corners[0], n_corners[1]], [n_corners[2], n_corners[1]]], OUT_SIZE)
         # pad image if crop bounds are negative
         if crop[0] < 0:
             img_rev = cv2.copyMakeBorder(img_rev, 0, 0, -crop[0], 0, borderType=BORDER_MODE, value=BORDER_VALUE)
@@ -215,7 +225,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
         if crop[3] < 0:
             img_rev = cv2.copyMakeBorder(img_rev, 0, -crop[3], 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
             crop[3] = 0
-        
+
         img_rev = img_rev[crop[1]:crop[3], crop[0]:crop[2]]     # crop using calculated bounds and padding
 
         n_width, n_height, dims = img_persp.shape               # dimensions of image before scaling
@@ -224,6 +234,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
         img_rev = cv2.resize(img_rev, OUT_SIZE, fx=fx, fy=fy)
 
         if DISPLAY:                                            
+            img_new = img_trans[int(bounds[1]):int(bounds[3]), int(bounds[0]):int(bounds[2])]
             cv2.imshow('original', img_new)
             cv2.imshow('warped', img_persp)
             cv2.imshow('reversed', img_rev)
