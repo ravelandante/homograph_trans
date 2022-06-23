@@ -11,10 +11,10 @@ SET_NAME = 'ADL-Rundle-6'   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
-DRAW_BOXES = True     # whether to draw bounding boxes
-DISPLAY = True      # whether to display images at the end of each loop
+DRAW_BOXES = True       # whether to draw bounding boxes
+DISPLAY = True          # whether to display images at the end of each loop
 
-FRAMES = 1          # num of frames to process (-1 to process all)
+FRAMES = 1              # num of frames to process (-1 to process all)
 IN_SIZE = (512, 512)
 OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
@@ -22,13 +22,13 @@ BORDER_VALUE = (127, 127, 127)
 
 #np.random.seed(146)
 
-"""Calculates random shift for 4 points of bounding box
-Args:
-    points (list of lists): 4 corners of original bounding box
-Returns:
-    list of lists: 4 corners of new bounding box
-"""
 def random_shift(points):
+    """Calculates random shift for 4 points of bounding box
+    Args:
+        points (list of lists): 4 corners of original bounding box
+    Returns:
+        list of lists: 4 corners of new bounding box
+    """
     points = np.array(points)
     width = points[1][0] - points[0][0]
     height = points[1][1] - points[2][1]
@@ -51,14 +51,14 @@ def random_shift(points):
 
     return points, points - orig_points
 
-"""Calculates parameters (bounds, padding) for cropping and resizing the image to the out_size
-Args:
-    corners (list of lists): 4 corners of bounding box
-    out_size (tuple of ints): (w, h) of output image
-Returns:
-    list: 4 bounding coordinates for crop (x_min, y_min, x_max, y_max)
-"""
-def calc_edges(corners, out_size):
+def calc_edges(corners, out_size=IN_SIZE):
+    """Calculates parameters (bounds, padding) for cropping and resizing the image to the out_size
+    Args:
+        corners (list of lists): 4 corners of bounding box
+        out_size (tuple of ints): (w, h) of output image
+    Returns:
+        list: 4 bounding coordinates for crop (x_min, y_min, x_max, y_max)
+    """
     bounds = [np.min(corners, axis=0)[0], np.min(corners, axis=0)[1],   # find min/max bounds (x_min, y_min, x_max, y_max)
                 np.max(corners, axis=0)[0], np.max(corners, axis=0)[1]]
 
@@ -130,7 +130,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):
         for j, _ in enumerate(corners):
             corners[j] = rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]
 
-        crop = calc_edges(corners, IN_SIZE)  # calculate padding and bounds
+        crop = calc_edges(corners)  # calculate padding and bounds
 
         # draw bounding boxes
         if DRAW_BOXES:
@@ -177,13 +177,19 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):
 
         img_rev = cv2.warpPerspective(img_persp, final_inv_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
-        if DISPLAY:
+        crop = calc_edges(corners, OUT_SIZE)  # calculate padding and bounds
+        img_rev = img_rev[crop[1]:crop[3], crop[0]:crop[2]]         # crop using calculated bounds and padding
+
+        n_width, n_height, dims = img_persp.shape                       # dimensions of image before scaling
+        fx, fy = OUT_SIZE[0]/n_width, OUT_SIZE[1]/n_height                # scaling factors
+
+        img_rev = cv2.resize(img_rev, OUT_SIZE, fx=fx, fy=fy)
+
+        if DISPLAY:                                                                  
             cv2.imshow('original', img_new)
             cv2.imshow('warped', img_persp)
             cv2.imshow('reversed', img_rev)
             cv2.waitKey(0)
 
-        # NOTE: maybe for the total inverse matrix, we just compare the final (shifted) points to the original points?
-        
     if i == FRAMES - 1:
         break
