@@ -14,7 +14,7 @@ SAVE_PATH = 'load_dataset/MOT_data/train'
 DRAW_BOXES = True     # whether to draw bounding boxes
 DISPLAY = True      # whether to display images at the end of each loop
 
-FRAMES = 4          # num of frames to process (-1 to process all)
+FRAMES = 1          # num of frames to process (-1 to process all)
 IN_SIZE = (512, 512)
 OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
@@ -169,10 +169,13 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):
 
         inv_dst_mat = np.float32([corners])
         inv_src_mat = np.float32([src_mat])
-
         inv_persp_mat = cv2.getPerspectiveTransform(inv_dst_mat, inv_src_mat)
-        img_rev = cv2.warpAffine(img_persp, inv_rot_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
-        img_rev = cv2.warpPerspective(img_rev, inv_persp_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
+
+        rot_row = np.array([0,0,1])
+        inv_rot_mat = np.vstack((inv_rot_mat, rot_row))                             # add 3rd row to inv_rot_mat to be equal in shape to inv_persp_mat
+        final_inv_mat = np.dot(inv_persp_mat, inv_rot_mat)                          # dot product to get final inverse matrix
+
+        img_rev = cv2.warpPerspective(img_persp, final_inv_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
         if DISPLAY:
             cv2.imshow('original', img_new)
@@ -181,9 +184,6 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):
             cv2.waitKey(0)
 
         # NOTE: maybe for the total inverse matrix, we just compare the final (shifted) points to the original points?
-        #rot_row = np.array([0,0,1])
-        #inv_rot_mat = np.vstack((inv_rot_mat, rot_row))
-        #final_inv_mat = np.multiply(inv_trans_mat, inv_rot_mat)"""
         
     if i == FRAMES - 1:
         break
