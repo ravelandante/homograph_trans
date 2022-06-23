@@ -17,7 +17,7 @@ SET_NAME = 'ADL-Rundle-6'                   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
-DRAW_BOXES = False                           # whether to draw bounding boxes
+DRAW_BOXES = True                           # whether to draw bounding boxes
 DISPLAY = True                              # whether to display images at the end of each loop
 
 FRAMES = 1                                  # num of frames to process (-1 to process all)
@@ -26,7 +26,7 @@ OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
 BORDER_VALUE = (127, 127, 127)
 
-np.random.seed(146)
+#np.random.seed(146)
 
 def random_shift(points):
     """Calculates random shift for 4 points of bounding box
@@ -56,7 +56,7 @@ def random_shift(points):
     points[3][0] += np.random.randint(0, x_shift)
     points[3][1] += np.random.randint(-y_shift, 0)
 
-    return points, points - orig_points
+    return points, (points - orig_points)
 
 
 def centre_shift(bounds, width, height):
@@ -80,10 +80,7 @@ def centre_shift(bounds, width, height):
     y_min += y_shift
     y_max += y_shift
 
-    bounds = [x_min, y_min, x_max, y_max]
-    bounds = [int(c) for c in bounds]
-
-    return np.float32([[1, 0, x_shift], [0, 1, y_shift]]), bounds
+    return np.float32([[1, 0, x_shift], [0, 1, y_shift]]), [int(c) for c in [x_min, y_min, x_max, y_max]]
 
 
 def calc_edges(corners, out_size=IN_SIZE):
@@ -100,7 +97,7 @@ def calc_edges(corners, out_size=IN_SIZE):
     aspect = out_size[0]/out_size[1]                                    # aspect ratio of output image
     n_width, n_height = bounds[2] - bounds[0], bounds[3] - bounds[1]
     padding = 0
-    pad_lst = [0, 0, 0, 0]
+    pad_lst = [int]*4
 
     # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
 
@@ -112,10 +109,7 @@ def calc_edges(corners, out_size=IN_SIZE):
         padding = int((aspect*n_height - n_width)/2)
         pad_lst = [padding, 0, padding, 0]
     
-    crop = [bounds[0] - pad_lst[0], bounds[1] - pad_lst[1], bounds[2] + pad_lst[2], bounds[3] + pad_lst[3]]
-    crop = [int(c) for c in crop]
-    
-    return crop
+    return [int(c) for c in [bounds[0] - pad_lst[0], bounds[1] - pad_lst[1], bounds[2] + pad_lst[2], bounds[3] + pad_lst[3]]]
 
 
 gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')                                        # open/organise ground-truth tracking data
@@ -168,7 +162,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
 
         img_persp = img_persp[crop[1]:crop[3], crop[0]:crop[2]]         # crop using calculated bounds and padding
 
-        n_width, n_height, dims = img_persp.shape                       # dimensions of image before scaling
+        n_width, n_height, _ = img_persp.shape                       # dimensions of image before scaling
         fx, fy = IN_SIZE[0]/n_width, IN_SIZE[1]/n_height                # scaling factors
 
         img_persp = cv2.resize(img_persp, IN_SIZE, fx=fx, fy=fy)        # scale up to out_size
@@ -209,7 +203,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
                     np.max(src_mat, axis=0)[0], np.max(src_mat, axis=0)[1]]
         
         trans_mat, n_corners = centre_shift(n_bounds, width, height)
-        img_rev = cv2.warpAffine(img_rev, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
+        img_rev = cv2.warpAffine(img_rev, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE) # translate bounding box centre to centre of image
 
         crop = calc_edges([[n_corners[0], n_corners[3]], [n_corners[2], n_corners[3]], [n_corners[0], n_corners[1]], [n_corners[2], n_corners[1]]], OUT_SIZE)
         # pad image if crop bounds are negative
