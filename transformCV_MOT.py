@@ -11,15 +11,16 @@ SET_NAME = 'ADL-Rundle-6'   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
-BOUNDING = True     # whether to draw bounding boxes
+DRAW_BOXES = True     # whether to draw bounding boxes
+DISPLAY = True      # whether to display images at the end of each loop
 
-FRAMES = 1         # num of frames to process (-1 to process all)
+FRAMES = 4          # num of frames to process (-1 to process all)
 IN_SIZE = (512, 512)
 OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
 BORDER_VALUE = (127, 127, 127)
 
-np.random.seed(146)
+#np.random.seed(146)
 
 """Calculates random shift for 4 points of bounding box
 Args:
@@ -28,9 +29,10 @@ Returns:
     list of lists: 4 corners of new bounding box
 """
 def random_shift(points):
+    points = np.array(points)
     width = points[1][0] - points[0][0]
     height = points[1][1] - points[2][1]
-
+    orig_points = np.array(points)
     x_shift = 0.23*width
     y_shift = 0.23*height
 
@@ -47,7 +49,7 @@ def random_shift(points):
     points[3][0] += np.random.randint(0, x_shift)
     points[3][1] += np.random.randint(-y_shift, 0)
 
-    return points
+    return points, points - orig_points
 
 """Calculates parameters (bounds, padding) for cropping and resizing the image to the out_size
 Args:
@@ -93,6 +95,8 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):
         obj_ID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5]   # coords of original image
         angle = np.random.randint(-80, 80)
 
+        img_new = img_orig[int(y_min):int(y_max), int(x_min):int(x_max)]
+
         # translation to box_centre to prevent image corners going past image edges when rotating
         box_centre = ((x_max + x_min)//2, (y_max + y_min)//2)
         img_centre = (width//2, height//2)
@@ -108,8 +112,8 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):
         box_centre = ((x_max + x_min)//2, (y_max + y_min)//2)
 
         # get randomised dest coords
-        corners = random_shift([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
-        corners = np.array(corners).astype(int)
+        corners, diff = random_shift([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
+        corners = corners.astype(int)
 
         # perspective transformation (warp)
         src_mat = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
@@ -129,7 +133,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):
         crop = calc_edges(corners, IN_SIZE)  # calculate padding and bounds
 
         # draw bounding boxes
-        if BOUNDING:
+        if DRAW_BOXES:
             points = np.array([corners[3], corners[1], corners[0], corners[2]])
             points = points.reshape((-1, 1, 2))
             cv2.polylines(img_persp, [points], True, (0, 255, 0), thickness=1)
@@ -151,33 +155,35 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):
 
         # inverse matrices
         inv_rot_mat = cv2.getRotationMatrix2D((IN_SIZE[0]//2, IN_SIZE[0]//2), -angle, scale=1)
-
+        src_mat = dst_mat - diff
         for j, _ in enumerate(corners):
-            corners[j][0] -= crop[0]
+            corners[j][0] -= crop[0]                                                # find new coords of warped corners
             corners[j][1] -= crop[1]
-            corners[j] = corners[j][0]*fx, corners[j][1]*fy
-            corners[j] = inv_rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]
+            corners[j] = corners[j][0]*fx, corners[j][1]*fy                         # rescale coords to IN_SIZE
 
-        # NOTE: maybe for the total inverse matrix, we just compare the final (shifted) points to the original points?
-        for j, _ in enumerate(src_mat):
-            src_mat[j][0] -= crop[0]
-            src_mat[j][1] -= crop[1]
-            src_mat[j] = corners[j][0]*fx, corners[j][1]*fy
+            diff[j] = diff[j][0]*fx, diff[j][1]*fy                                  # rescale difference between src_mat, dst_mat to IN_SIZE
+            corners[j] = inv_rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]    # find new coords after rotation back
 
-        inv_src_mat = np.float32([src_mat])
+            src_mat[j][0] = corners[j][0] - diff[j][0]                              # find original bounding box coords in new frame using difference
+            src_mat[j][1] = corners[j][1] - diff[j][1]
+
         inv_dst_mat = np.float32([corners])
+        inv_src_mat = np.float32([src_mat])
 
         inv_persp_mat = cv2.getPerspectiveTransform(inv_dst_mat, inv_src_mat)
+        img_rev = cv2.warpAffine(img_persp, inv_rot_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
+        img_rev = cv2.warpPerspective(img_rev, inv_persp_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
-        img_persp = cv2.warpAffine(img_persp, inv_rot_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
-        #img_persp = cv2.warpPerspective(img_persp, inv_persp_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
-        cv2.imshow('img', img_persp)
-        cv2.waitKey(0)
-        exit()
+        if DISPLAY:
+            cv2.imshow('original', img_new)
+            cv2.imshow('warped', img_persp)
+            cv2.imshow('reversed', img_rev)
+            cv2.waitKey(0)
 
+        # NOTE: maybe for the total inverse matrix, we just compare the final (shifted) points to the original points?
         #rot_row = np.array([0,0,1])
         #inv_rot_mat = np.vstack((inv_rot_mat, rot_row))
-        #final_inv_mat = np.multiply(inv_trans_mat, inv_rot_mat)
+        #final_inv_mat = np.multiply(inv_trans_mat, inv_rot_mat)"""
         
     if i == FRAMES - 1:
         break
