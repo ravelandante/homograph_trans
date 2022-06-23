@@ -33,7 +33,8 @@ def random_shift(points):
     Args:
         points (list of lists): 4 corners of original bounding box
     Returns:
-        list of lists: 4 corners of new bounding box
+        2D numpy array: 4 corners of new bounding box
+        2D numpy array: x and y differences between source and dest points
     """
     points = np.array(points)
     width = points[1][0] - points[0][0]
@@ -56,6 +57,31 @@ def random_shift(points):
     points[3][1] += np.random.randint(-y_shift, 0)
 
     return points, points - orig_points
+
+
+def centre_shift(bounds, width, height):
+    """Calculates transform matrix to translate bounding box to image center
+    Args:
+        bounds (list of floats): x_min, y_min, x_max, y_max of bounding box
+        width (int): width of whole image
+        height(int): height of whole image
+    Returns:
+        2D numpy array: transform matrix
+        list: new bounds of translated box
+    """
+    x_min, y_min, x_max, y_max = bounds
+    box_centre = ((x_max + x_min)//2, (y_max + y_min)//2)
+    img_centre = (width//2, height//2)
+
+    x_shift, y_shift = int(img_centre[0] - box_centre[0]), int(img_centre[1] - box_centre[1])
+
+    x_min += x_shift    # realign bounding box coords to new translation
+    x_max += x_shift
+    y_min += y_shift
+    y_max += y_shift
+
+    return np.float32([[1, 0, x_shift], [0, 1, y_shift]]), [x_min, y_min, x_max, y_max]
+
 
 def calc_edges(corners, out_size=IN_SIZE):
     """Calculates parameters (bounds, padding) for cropping and resizing the image to the out_size
@@ -98,38 +124,30 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
     height, width = img_orig.shape[:2]                                                                  # full image dimensions
 
     for row in gt[i]:                                                                                   # loop through detections in frame
-        obj_ID, x_min, y_min, x_max, y_max = row[1], row[2], row[3], row[2] + row[4], row[3] + row[5]   # coords of original image
+        bounds = []
+        # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
+        obj_ID, bounds = row[1], [row[2], row[3], row[2] + row[4], row[3] + row[5]]   # coords of original image
         angle = np.random.randint(-80, 80)
 
-        img_new = img_orig[int(y_min):int(y_max), int(x_min):int(x_max)]
+        img_new = img_orig[int(bounds[1]):int(bounds[3]), int(bounds[0]):int(bounds[2])]
 
         # translation of bounding box to image centre to prevent rotated image corners getting cut off by image bounds
-        box_centre = ((x_max + x_min)//2, (y_max + y_min)//2)
-        img_centre = (width//2, height//2)
-        x_shift, y_shift = int(img_centre[0] - box_centre[0]), int(img_centre[1] - box_centre[1])
-
-        trans_mat = np.float32([[1, 0, x_shift], [0, 1, y_shift]])
+        trans_mat, bounds = centre_shift(bounds, width, height)
         img_persp = cv2.warpAffine(img_orig, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
-        x_min += x_shift    # realign bounding box coords to new translation
-        x_max += x_shift
-        y_min += y_shift
-        y_max += y_shift
-        box_centre = ((x_max + x_min)//2, (y_max + y_min)//2)
-
         # get randomised dest coords
-        corners, diff = random_shift([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
+        corners, diff = random_shift([[bounds[0], bounds[3]], [bounds[2], bounds[3]], [bounds[0], bounds[1]], [bounds[2], bounds[1]]])
         corners = corners.astype(int)
 
         # perspective transform (warp)
-        src_mat = np.float32([[x_min, y_max], [x_max, y_max], [x_min, y_min], [x_max, y_min]])
+        src_mat = np.float32([[bounds[0], bounds[3]], [bounds[2], bounds[3]], [bounds[0], bounds[1]], [bounds[2], bounds[1]]])
         dst_mat = np.float32(corners)
 
         persp_mat = cv2.getPerspectiveTransform(src_mat, dst_mat)
         img_persp = cv2.warpPerspective(img_persp, persp_mat, (width,height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
         # affine rotation transform
-        rot_mat = cv2.getRotationMatrix2D(box_centre, angle, scale=1)
+        rot_mat = cv2.getRotationMatrix2D(((bounds[2] + bounds[0])//2, (bounds[3] + bounds[1])//2), angle, scale=1)
         img_persp = cv2.warpAffine(img_persp, rot_mat, (width,height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
         # get new corner coords after rotation
