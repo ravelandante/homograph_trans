@@ -1,5 +1,11 @@
-## Fynn Young
-## Random Homograph Image Transformations
+"""
+* Applying random homograph transforms (affine rotation, perspective transform) to images from the MOT15 dataset
+* Padding, cropping, resizing transformed image to IN_SIZE for neural network input
+* Calculating inverse transform matrix and resizing output image to OUT_SIZE
+
+Author: Fynn Young
+        23/06/2022
+"""
 
 import cv2
 import os
@@ -177,11 +183,11 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):
 
         img_rev = cv2.warpPerspective(img_persp, final_inv_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
-        crop = calc_edges(corners, OUT_SIZE)  # calculate padding and bounds
-        img_rev = img_rev[crop[1]:crop[3], crop[0]:crop[2]]         # crop using calculated bounds and padding
+        crop = calc_edges(corners, OUT_SIZE)                    # calculate padding and bounds
+        img_rev = img_rev[crop[1]:crop[3], crop[0]:crop[2]]     # crop using calculated bounds and padding
 
-        n_width, n_height, dims = img_persp.shape                       # dimensions of image before scaling
-        fx, fy = OUT_SIZE[0]/n_width, OUT_SIZE[1]/n_height                # scaling factors
+        n_width, n_height, dims = img_persp.shape               # dimensions of image before scaling
+        fx, fy = OUT_SIZE[0]/n_width, OUT_SIZE[1]/n_height      # scaling factors
 
         img_rev = cv2.resize(img_rev, OUT_SIZE, fx=fx, fy=fy)
 
