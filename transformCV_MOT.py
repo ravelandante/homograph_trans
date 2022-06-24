@@ -13,7 +13,7 @@ import os
 import numpy as np
 from numpy import genfromtxt
 
-SET_NAME = 'ADL-Rundle-6'                   # name of dataset
+SET_NAME = 'ETH-Bahnhof'                   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
@@ -191,13 +191,14 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
 
         inv_dst_mat = np.float32([corners])
         inv_src_mat = np.float32([src_mat])
+
         inv_persp_mat = cv2.getPerspectiveTransform(inv_dst_mat, inv_src_mat)
 
         rot_row = np.array([0,0,1])
         inv_rot_mat = np.vstack((inv_rot_mat, rot_row))                             # add 3rd row to inv_rot_mat to be equal in shape to inv_persp_mat
         final_inv_mat = np.dot(inv_persp_mat, inv_rot_mat)                          # dot product to get final inverse matrix
 
-        img_rev = cv2.warpPerspective(img_persp, final_inv_mat, IN_SIZE, borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
+        img_rev = cv2.warpPerspective(img_persp, final_inv_mat, (IN_SIZE[0]*2,IN_SIZE[1]*2), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
         
         n_bounds = [np.min(src_mat, axis=0)[0], np.min(src_mat, axis=0)[1],         # find new min/max bounds (x_min, y_min, x_max, y_max)
                     np.max(src_mat, axis=0)[0], np.max(src_mat, axis=0)[1]]
@@ -225,9 +226,9 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
         n_width, n_height, dims = img_persp.shape               # dimensions of image before scaling
         fx, fy = OUT_SIZE[0]/n_width, OUT_SIZE[1]/n_height      # scaling factors
 
-        img_rev = cv2.resize(img_rev, OUT_SIZE, fx=fx, fy=fy)
+        #img_rev = cv2.resize(img_rev, OUT_SIZE, fx=fx, fy=fy)
 
-        if DISPLAY:                                            
+        if DISPLAY:
             img_new = img_trans[int(bounds[1]):int(bounds[3]), int(bounds[0]):int(bounds[2])]
             cv2.imshow('original', img_new)
             cv2.imshow('warped', img_persp)
