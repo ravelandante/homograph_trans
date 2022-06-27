@@ -19,9 +19,9 @@ BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
 DRAW_BOXES = False                           # whether to draw bounding boxes
-DISPLAY = False                              # whether to display images at the end of each loop
+INVERSE = False                              # whether to display images at the end of each loop
 
-FRAMES = -1                                  # num of frames to process (-1 to process all)
+FRAMES = 1                                  # num of frames to process (-1 to process all)
 IN_SIZE = (512, 512)
 OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
@@ -153,6 +153,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
             corners[j] = rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]
 
         crop = calc_edges(corners)  # calculate padding and bounds
+        # pad if person (bounding box) is too large for padding required
         if crop[0] < 0:
             img_persp = cv2.copyMakeBorder(img_persp, 0, 0, -crop[0], 0, borderType=BORDER_MODE, value=BORDER_VALUE)
             crop[0] = 0
@@ -192,59 +193,59 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
             f.write('\n{:04}_{:04}.jpg,0'.format(i + 1, int(obj_ID)))
 
         # inverse matrices
-        inv_rot_mat = cv2.getRotationMatrix2D((IN_SIZE[0]//2, IN_SIZE[0]//2), -angle, scale=1)
-        src_mat = dst_mat - diff
-        for j, _ in enumerate(corners):
-            corners[j][0] -= crop[0]                                                # find new coords of warped corners
-            corners[j][1] -= crop[1]
-            corners[j] = corners[j][0]*fx, corners[j][1]*fy                         # rescale coords to IN_SIZE
+        if INVERSE:
+            inv_rot_mat = cv2.getRotationMatrix2D((IN_SIZE[0]//2, IN_SIZE[0]//2), -angle, scale=1)
+            src_mat = dst_mat - diff
+            for j, _ in enumerate(corners):
+                corners[j][0] -= crop[0]                                                # find new coords of warped corners
+                corners[j][1] -= crop[1]
+                corners[j] = corners[j][0]*fx, corners[j][1]*fy                         # rescale coords to IN_SIZE
 
-            diff[j] = diff[j][0]*fx, diff[j][1]*fy                                  # rescale difference between src_mat, dst_mat to IN_SIZE
-            corners[j] = inv_rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]    # find new coords after rotation back
+                diff[j] = diff[j][0]*fx, diff[j][1]*fy                                  # rescale difference between src_mat, dst_mat to IN_SIZE
+                corners[j] = inv_rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]    # find new coords after rotation back
 
-            src_mat[j][0] = corners[j][0] - diff[j][0]                              # find original bounding box coords in new frame using difference
-            src_mat[j][1] = corners[j][1] - diff[j][1]
+                src_mat[j][0] = corners[j][0] - diff[j][0]                              # find original bounding box coords in new frame using difference
+                src_mat[j][1] = corners[j][1] - diff[j][1]
 
-        inv_dst_mat = np.float32([corners])
-        inv_src_mat = np.float32([src_mat])
+            inv_dst_mat = np.float32([corners])
+            inv_src_mat = np.float32([src_mat])
 
-        inv_persp_mat = cv2.getPerspectiveTransform(inv_dst_mat, inv_src_mat)
+            inv_persp_mat = cv2.getPerspectiveTransform(inv_dst_mat, inv_src_mat)
 
-        rot_row = np.array([0,0,1])
-        inv_rot_mat = np.vstack((inv_rot_mat, rot_row))                             # add 3rd row to inv_rot_mat to be equal in shape to inv_persp_mat
-        final_inv_mat = np.dot(inv_persp_mat, inv_rot_mat)                          # dot product to get final inverse matrix
+            rot_row = np.array([0,0,1])
+            inv_rot_mat = np.vstack((inv_rot_mat, rot_row))                             # add 3rd row to inv_rot_mat to be equal in shape to inv_persp_mat
+            final_inv_mat = np.dot(inv_persp_mat, inv_rot_mat)                          # dot product to get final inverse matrix
 
-        img_rev = cv2.warpPerspective(img_persp, final_inv_mat, (IN_SIZE[0]*2,IN_SIZE[1]*2), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
+            img_rev = cv2.warpPerspective(img_persp, final_inv_mat, (IN_SIZE[0]*2,IN_SIZE[1]*2), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
         
-        n_bounds = [np.min(src_mat, axis=0)[0], np.min(src_mat, axis=0)[1],         # find new min/max bounds (x_min, y_min, x_max, y_max)
-                    np.max(src_mat, axis=0)[0], np.max(src_mat, axis=0)[1]]
+            n_bounds = [np.min(src_mat, axis=0)[0], np.min(src_mat, axis=0)[1],         # find new min/max bounds (x_min, y_min, x_max, y_max)
+                        np.max(src_mat, axis=0)[0], np.max(src_mat, axis=0)[1]]
         
-        trans_mat, n_corners = centre_shift(n_bounds, width, height)
-        img_rev = cv2.warpAffine(img_rev, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE) # translate bounding box centre to centre of image
+            trans_mat, n_corners = centre_shift(n_bounds, width, height)
+            img_rev = cv2.warpAffine(img_rev, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE) # translate bounding box centre to centre of image
 
-        crop = calc_edges([[n_corners[0], n_corners[3]], [n_corners[2], n_corners[3]], [n_corners[0], n_corners[1]], [n_corners[2], n_corners[1]]], OUT_SIZE)
-        # pad image if crop bounds are negative
-        if crop[0] < 0:
-            img_rev = cv2.copyMakeBorder(img_rev, 0, 0, -crop[0], 0, borderType=BORDER_MODE, value=BORDER_VALUE)
-            crop[0] = 0
-        if crop[1] < 0:
-            img_rev = cv2.copyMakeBorder(img_rev, -crop[1], 0, 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
-            crop[1] = 0
-        if crop[2] < 0:
-            img_rev = cv2.copyMakeBorder(img_rev, 0, 0, 0, -crop[2], borderType=BORDER_MODE, value=BORDER_VALUE)
-            crop[2] = 0
-        if crop[3] < 0:
-            img_rev = cv2.copyMakeBorder(img_rev, 0, -crop[3], 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
-            crop[3] = 0
+            crop = calc_edges([[n_corners[0], n_corners[3]], [n_corners[2], n_corners[3]], [n_corners[0], n_corners[1]], [n_corners[2], n_corners[1]]], OUT_SIZE)
+            # pad image if crop bounds are negative
+            if crop[0] < 0:
+                img_rev = cv2.copyMakeBorder(img_rev, 0, 0, -crop[0], 0, borderType=BORDER_MODE, value=BORDER_VALUE)
+                crop[0] = 0
+            if crop[1] < 0:
+                img_rev = cv2.copyMakeBorder(img_rev, -crop[1], 0, 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
+                crop[1] = 0
+            if crop[2] < 0:
+                img_rev = cv2.copyMakeBorder(img_rev, 0, 0, 0, -crop[2], borderType=BORDER_MODE, value=BORDER_VALUE)
+                crop[2] = 0
+            if crop[3] < 0:
+                img_rev = cv2.copyMakeBorder(img_rev, 0, -crop[3], 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
+                crop[3] = 0
 
-        img_rev = img_rev[crop[1]:crop[3], crop[0]:crop[2]]     # crop using calculated bounds and padding
+            img_rev = img_rev[crop[1]:crop[3], crop[0]:crop[2]]     # crop using calculated bounds and padding
 
-        n_width, n_height, dims = img_persp.shape               # dimensions of image before scaling
-        fx, fy = OUT_SIZE[0]/n_width, OUT_SIZE[1]/n_height      # scaling factors
+            n_width, n_height, dims = img_persp.shape               # dimensions of image before scaling
+            fx, fy = OUT_SIZE[0]/n_width, OUT_SIZE[1]/n_height      # scaling factors
 
-        #img_rev = cv2.resize(img_rev, OUT_SIZE, fx=fx, fy=fy)
+            img_rev = cv2.resize(img_rev, OUT_SIZE, fx=fx, fy=fy)
 
-        if DISPLAY:
             img_new = img_trans[int(bounds[1]):int(bounds[3]), int(bounds[0]):int(bounds[2])]
             cv2.imshow('original', img_new)
             cv2.imshow('warped', img_persp)
