@@ -4,7 +4,7 @@
 * Calculating inverse transform matrix and resizing output image to OUT_SIZE
 
 Author: Fynn Young
-        23/06/2022
+        27/06/2022
 """
 
 import os
@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 from numpy import genfromtxt
 
-SET_NAME = 'ADL-Rundle-6'                   # name of dataset
+SET_NAME = 'ETH-Bahnhof'                   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
@@ -38,11 +38,9 @@ def random_shift(points):
         2D numpy array: x and y differences between source and dest points
     """
     points = np.array(points)
-    width = points[1][0] - points[0][0]
-    height = points[1][1] - points[2][1]
     orig_points = np.array(points)
-    x_shift = 0.23*width
-    y_shift = 0.23*height
+    width, height = points[1][0] - points[0][0], points[1][1] - points[2][1]
+    x_shift, y_shift = 0.23*width, 0.23*height
 
     # bot_left
     points[0][0] += np.random.randint(0, x_shift)
@@ -119,7 +117,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
     img_path = BASE_PATH + '/img1/{:06}.jpg'.format(i + 1)
     img_orig = cv2.imread(img_path)
 
-    print('FRAME', i + 1)
+    print('FRAME', i + 1, end='...')
 
     height, width = img_orig.shape[:2]                                                          # full image dimensions
 
@@ -127,8 +125,6 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
         bounds = []
         # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
         obj_ID, bounds = row[1], [row[2], row[3], row[2] + row[4], row[3] + row[5]]             # coords of original image
-        if obj_ID != 6:
-            continue
         angle = np.random.randint(-80, 80)
 
         # translation of bounding box to image centre to prevent rotated image corners getting cut off by image bounds
@@ -155,7 +151,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
             corners[j] = rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]
 
         crop = calc_edges(corners)  # calculate padding and bounds
-        # pad if person (bounding box) is too large for padding required
+        # pad image with constant BORDER_VALUE if not enough space around bounding box to pad normally
         border = [0]*4
         for k in range(len(crop)):
             if crop[k] < 0:
@@ -218,10 +214,11 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
                         np.max(src_mat, axis=0)[0], np.max(src_mat, axis=0)[1]]
         
             trans_mat, n_corners = centre_shift(n_bounds, width, height)
-            img_rev = cv2.warpAffine(img_rev, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE) # translate bounding box centre to centre of image
+            # translate bounding box centre to centre of image to avoid cut-offs
+            img_rev = cv2.warpAffine(img_rev, trans_mat, (width, height), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
 
             crop = calc_edges([[n_corners[0], n_corners[3]], [n_corners[2], n_corners[3]], [n_corners[0], n_corners[1]], [n_corners[2], n_corners[1]]], OUT_SIZE)
-            # pad image if crop bounds are negative
+            # pad image with constant BORDER_VALUE if crop bounds are negative
             border = [0]*4
             for l in range(len(crop)):
                 if crop[l] < 0:
@@ -241,6 +238,7 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
             cv2.imshow('warped', img_persp)
             cv2.imshow('reversed', img_rev)
             cv2.waitKey(0)
-
+    print('Done')
     if i == FRAMES - 1:
         break
+print('All Done')
