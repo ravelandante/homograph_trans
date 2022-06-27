@@ -21,7 +21,7 @@ SAVE_PATH = 'load_dataset/MOT_data/train'
 DRAW_BOXES = False                           # whether to draw bounding boxes
 INVERSE = False                              # whether to display images at the end of each loop
 
-FRAMES = 1                                  # num of frames to process (-1 to process all)
+FRAMES = -1                                  # num of frames to process (-1 to process all)
 IN_SIZE = (512, 512)
 OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
@@ -127,6 +127,8 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
         bounds = []
         # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
         obj_ID, bounds = row[1], [row[2], row[3], row[2] + row[4], row[3] + row[5]]             # coords of original image
+        if obj_ID != 6:
+            continue
         angle = np.random.randint(-80, 80)
 
         # translation of bounding box to image centre to prevent rotated image corners getting cut off by image bounds
@@ -154,18 +156,12 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
 
         crop = calc_edges(corners)  # calculate padding and bounds
         # pad if person (bounding box) is too large for padding required
-        if crop[0] < 0:
-            img_persp = cv2.copyMakeBorder(img_persp, 0, 0, -crop[0], 0, borderType=BORDER_MODE, value=BORDER_VALUE)
-            crop[0] = 0
-        if crop[1] < 0:
-            img_persp = cv2.copyMakeBorder(img_persp, -crop[1], 0, 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
-            crop[1] = 0
-        if crop[2] < 0:
-            img_persp = cv2.copyMakeBorder(img_persp, 0, 0, 0, -crop[2], borderType=BORDER_MODE, value=BORDER_VALUE)
-            crop[2] = 0
-        if crop[3] < 0:
-            img_persp = cv2.copyMakeBorder(img_persp, 0, -crop[3], 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
-            crop[3] = 0
+        border = [0]*4
+        for k in range(len(crop)):
+            if crop[k] < 0:
+                border[k] = -crop[k]
+                crop[k] = 0
+        img_persp = cv2.copyMakeBorder(img_persp, border[1], border[3], border[0], border[2], borderType=BORDER_MODE, value=BORDER_VALUE)
 
         # draw bounding boxes
         if DRAW_BOXES:
@@ -226,18 +222,12 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
 
             crop = calc_edges([[n_corners[0], n_corners[3]], [n_corners[2], n_corners[3]], [n_corners[0], n_corners[1]], [n_corners[2], n_corners[1]]], OUT_SIZE)
             # pad image if crop bounds are negative
-            if crop[0] < 0:
-                img_rev = cv2.copyMakeBorder(img_rev, 0, 0, -crop[0], 0, borderType=BORDER_MODE, value=BORDER_VALUE)
-                crop[0] = 0
-            if crop[1] < 0:
-                img_rev = cv2.copyMakeBorder(img_rev, -crop[1], 0, 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
-                crop[1] = 0
-            if crop[2] < 0:
-                img_rev = cv2.copyMakeBorder(img_rev, 0, 0, 0, -crop[2], borderType=BORDER_MODE, value=BORDER_VALUE)
-                crop[2] = 0
-            if crop[3] < 0:
-                img_rev = cv2.copyMakeBorder(img_rev, 0, -crop[3], 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
-                crop[3] = 0
+            border = [0]*4
+            for l in range(len(crop)):
+                if crop[l] < 0:
+                    border[l] = -crop[l]
+                    crop[l] = 0
+            img_rev = cv2.copyMakeBorder(img_rev, border[1], border[3], border[0], border[2], borderType=BORDER_MODE, value=BORDER_VALUE)
 
             img_rev = img_rev[crop[1]:crop[3], crop[0]:crop[2]]     # crop using calculated bounds and padding
 
