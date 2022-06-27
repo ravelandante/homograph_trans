@@ -7,20 +7,21 @@ Author: Fynn Young
         23/06/2022
 """
 
-import cv2
 import os
+import sys
 
+import cv2
 import numpy as np
 from numpy import genfromtxt
 
-SET_NAME = 'ETH-Bahnhof'                   # name of dataset
+SET_NAME = 'ADL-Rundle-6'                   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 SAVE_PATH = 'load_dataset/MOT_data/train'
 
-DRAW_BOXES = True                           # whether to draw bounding boxes
-DISPLAY = True                              # whether to display images at the end of each loop
+DRAW_BOXES = False                           # whether to draw bounding boxes
+DISPLAY = False                              # whether to display images at the end of each loop
 
-FRAMES = 1                                  # num of frames to process (-1 to process all)
+FRAMES = -1                                  # num of frames to process (-1 to process all)
 IN_SIZE = (512, 512)
 OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
@@ -97,7 +98,7 @@ def calc_edges(corners, out_size=IN_SIZE):
     aspect = out_size[0]/out_size[1]                                    # aspect ratio of output image
     n_width, n_height = bounds[2] - bounds[0], bounds[3] - bounds[1]
     padding = 0
-    pad_lst = [int]*4
+    pad_lst = [0]*4
 
     # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
 
@@ -108,7 +109,6 @@ def calc_edges(corners, out_size=IN_SIZE):
     elif n_height > n_width:
         padding = int((aspect*n_height - n_width)/2)
         pad_lst = [padding, 0, padding, 0]
-    
     return [int(c) for c in [bounds[0] - pad_lst[0], bounds[1] - pad_lst[1], bounds[2] + pad_lst[2], bounds[3] + pad_lst[3]]]
 
 
@@ -153,17 +153,33 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
             corners[j] = rot_mat.dot(np.array(tuple(corners[j]) + (1,)))[:2]
 
         crop = calc_edges(corners)  # calculate padding and bounds
+        if crop[0] < 0:
+            img_persp = cv2.copyMakeBorder(img_persp, 0, 0, -crop[0], 0, borderType=BORDER_MODE, value=BORDER_VALUE)
+            crop[0] = 0
+        if crop[1] < 0:
+            img_persp = cv2.copyMakeBorder(img_persp, -crop[1], 0, 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
+            crop[1] = 0
+        if crop[2] < 0:
+            img_persp = cv2.copyMakeBorder(img_persp, 0, 0, 0, -crop[2], borderType=BORDER_MODE, value=BORDER_VALUE)
+            crop[2] = 0
+        if crop[3] < 0:
+            img_persp = cv2.copyMakeBorder(img_persp, 0, -crop[3], 0, 0, borderType=BORDER_MODE, value=BORDER_VALUE)
+            crop[3] = 0
 
         # draw bounding boxes
         if DRAW_BOXES:
             points = np.array([corners[3], corners[1], corners[0], corners[2]])
             points = points.reshape((-1, 1, 2))
             cv2.polylines(img_persp, [points], True, (0, 255, 0), thickness=1)
-
+        
         img_persp = img_persp[crop[1]:crop[3], crop[0]:crop[2]]         # crop using calculated bounds and padding
 
-        n_width, n_height, _ = img_persp.shape                       # dimensions of image before scaling
-        fx, fy = IN_SIZE[0]/n_width, IN_SIZE[1]/n_height                # scaling factors
+        try:
+            n_width, n_height, _ = img_persp.shape                      # dimensions of image before scaling
+            fx, fy = IN_SIZE[0]/n_width, IN_SIZE[1]/n_height            # scaling factors
+        except ZeroDivisionError:
+            print('Zero Division', '\nobj_ID:', obj_ID, 'dims:', (n_width, n_height), 'corners:', crop)
+            sys.exit(1)
 
         img_persp = cv2.resize(img_persp, IN_SIZE, fx=fx, fy=fy)        # scale up to out_size
 
