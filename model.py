@@ -18,21 +18,19 @@ class STN(nn.Module):
         self.fc_loc = nn.Sequential(
             nn.Linear(128*60*60, 256),
             nn.ReLU(True),
-            nn.Linear(256, 3 * 2)
+            nn.Linear(256, 3 * 3)
         )
         # initializing the weights and biases with identity transformations
         self.fc_loc[2].weight.data.zero_()
-        self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0],
+        self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0, 0, 0, 1],
                                                     dtype=torch.float))
     def stn(self, x):
-        #plt.imshow(x[0].permute(1, 2, 0))
-        #plt.show()
         xs = self.localization(x)
         xs = xs.view(-1, xs.size(1)*xs.size(2)*xs.size(3))
         # calculate the transformation parameters theta
         theta = self.fc_loc(xs)
         # resize theta
-        theta = theta.view(-1, 2, 3) 
+        theta = theta.view(-1, 3, 3) 
         return theta
     
     def forward(self, x):

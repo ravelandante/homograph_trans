@@ -1,12 +1,13 @@
 import torch
 import torch.optim as optim
 import torch.nn as nn
-import numpy as np
 import model
 from torch.utils.data import DataLoader
 from torchvision import  transforms
 from load_dataset.custom_MOT import custom_MOT
 from tqdm import tqdm
+import cv2
+import numpy as np
 
 # learning parameters
 learning_rate = 0.001
@@ -55,8 +56,8 @@ def fit(model, dataloader, optimizer, criterion, train_data):
         outputs = model(data)
         loss = criterion(outputs, target)
         train_running_loss += loss.item()
-        _, preds = torch.max(outputs.data, 1)
-        train_running_correct += (preds == target).sum().item()
+        #_, preds = torch.max(outputs.data, 1)
+        train_running_correct += (outputs.data == target).sum().item()
         loss.backward()
         optimizer.step()
     train_loss = train_running_loss/len(dataloader.dataset)
@@ -75,9 +76,18 @@ def validate(model, dataloader, optimizer, criterion, val_data):
             outputs = model(data)
             loss = criterion(outputs, target)
             
+            img = data[0].numpy()
+            img = img.transpose(1, 2, 0)
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            tar = target[0].numpy()
+            img_warp = cv2.warpPerspective(img, tar, (256, 256), borderMode=cv2.BORDER_CONSTANT, borderValue=(127,127,127))
+            cv2.imshow('orig warped', img)
+            cv2.imshow('new warped', img_warp)
+            cv2.waitKey(0)
+
             val_running_loss += loss.item()
-            _, preds = torch.max(outputs.data, 1)
-            val_running_correct += (preds == target).sum().item()
+            #_, preds = torch.max(outputs.data, 1)
+            val_running_correct += (outputs.data == target).sum().item()
         
         val_loss = val_running_loss/len(dataloader.dataset)
         val_accuracy = 100. * val_running_correct/len(dataloader.dataset)        
