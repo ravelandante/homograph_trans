@@ -8,7 +8,6 @@ Author: Fynn Young
 """
 
 import os
-import sys
 
 import cv2
 import numpy as np
@@ -200,19 +199,19 @@ for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                         
         inv_persp_mat = cv2.getPerspectiveTransform(inv_dst_mat, inv_src_mat)
 
         rot_row = np.array([0,0,1])
-        inv_rot_mat = np.vstack((inv_rot_mat, rot_row))                             # add 3rd row to inv_rot_mat to be equal in shape to inv_persp_mat
-        final_inv_mat = np.dot(inv_persp_mat, inv_rot_mat)                          # dot product to get final inverse matrix
+        inv_rot_mat = np.vstack((inv_rot_mat, rot_row))                                         # add 3rd row to inv_rot_mat to be equal in shape to inv_persp_mat
+        final_inv_mat = np.dot(inv_persp_mat, inv_rot_mat)                                      # dot product to get final inverse matrix
 
-        with open('load_dataset/MOT_data/MOT_labels.csv', 'a') as f:    # write filenames to csv file for custom dataset
+        with open('load_dataset/MOT_data/MOT_labels.csv', 'a') as f:                            # write filenames to csv file for custom dataset
             if i == 0 and obj_ID == 1:
                 f.truncate(14)
-            label = '#'.join(i for i in list(final_inv_mat.astype(str).flatten())).split(',')
+            label = '#'.join(i for i in list(final_inv_mat.astype(str).flatten())).split(',')   # formatting of inverse matrix to string, replace commas with '#'
             f.write('\n{:04}_{:04}.jpg,{}'.format(i + 1, int(obj_ID), label[0]))
 
         if SHOW_INVERSE:
             img_rev = cv2.warpPerspective(img_persp, final_inv_mat, (IN_SIZE[0]*2,IN_SIZE[1]*2), borderMode=BORDER_MODE, borderValue=BORDER_VALUE)
         
-            n_bounds = [np.min(src_mat, axis=0)[0], np.min(src_mat, axis=0)[1],         # find new min/max bounds (x_min, y_min, x_max, y_max)
+            n_bounds = [np.min(src_mat, axis=0)[0], np.min(src_mat, axis=0)[1],                 # find new min/max bounds (x_min, y_min, x_max, y_max)
                         np.max(src_mat, axis=0)[0], np.max(src_mat, axis=0)[1]]
         
             trans_mat, n_corners = centre_shift(n_bounds, width, height)
