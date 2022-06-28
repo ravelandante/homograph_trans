@@ -7,7 +7,6 @@ from torchvision import  transforms
 from load_dataset.custom_MOT import custom_MOT
 from tqdm import tqdm
 import cv2
-import numpy as np
 
 # learning parameters
 learning_rate = 0.001
@@ -34,7 +33,7 @@ train_loader = DataLoader(
 val_loader = DataLoader(
     val_data, 
     batch_size=batch_size,
-    shuffle=False
+    shuffle=True
 )
 
 # initialize the model
@@ -56,16 +55,15 @@ def fit(model, dataloader, optimizer, criterion, train_data):
         outputs = model(data)
         loss = criterion(outputs, target)
         train_running_loss += loss.item()
-        #_, preds = torch.max(outputs.data, 1)
-        train_running_correct += (outputs.data == target).sum().item()
+        #train_running_correct += abs(torch.sub(target, outputs.data))
         loss.backward()
         optimizer.step()
     train_loss = train_running_loss/len(dataloader.dataset)
-    train_accuracy = 100. * train_running_correct/len(dataloader.dataset)    
+    train_accuracy = train_running_correct/len(dataloader.dataset)
     return train_loss, train_accuracy
 
 # validation function
-def validate(model, dataloader, optimizer, criterion, val_data):
+def validate(model, dataloader, optimizer, criterion, val_data, epoch):
     print('Validating')
     model.eval()
     val_running_loss = 0.0
@@ -76,21 +74,22 @@ def validate(model, dataloader, optimizer, criterion, val_data):
             outputs = model(data)
             loss = criterion(outputs, target)
             
-            img = data[0].numpy()
-            img = img.transpose(1, 2, 0)
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-            tar = target[0].numpy()
-            img_warp = cv2.warpPerspective(img, tar, (256, 256), borderMode=cv2.BORDER_CONSTANT, borderValue=(127,127,127))
-            cv2.imshow('orig warped', img)
-            cv2.imshow('new warped', img_warp)
-            cv2.waitKey(0)
+            # display original warped and network corrected images
+            if epoch == 1:
+                img = data[0].numpy()
+                img = img.transpose(1, 2, 0)
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                tar = target[0].numpy()
+                img_warp = cv2.warpPerspective(img, tar, (256, 256), borderMode=cv2.BORDER_CONSTANT, borderValue=(127,127,127))
+                img_warp = img_warp[0:256, 64:192]
+                cv2.imshow('orig warped', img)
+                cv2.imshow('new warped', img_warp)
+                cv2.waitKey(0)
 
             val_running_loss += loss.item()
-            #_, preds = torch.max(outputs.data, 1)
-            val_running_correct += (outputs.data == target).sum().item()
-        
+            #val_running_correct += abs(torch.sub(target, outputs.data))
         val_loss = val_running_loss/len(dataloader.dataset)
-        val_accuracy = 100. * val_running_correct/len(dataloader.dataset)        
+        val_accuracy = val_running_correct/len(dataloader.dataset)
         return val_loss, val_accuracy
 
 # train for certain epochs
@@ -101,6 +100,6 @@ for epoch in range(epochs):
                                                  train_data)
     val_epoch_loss, val_epoch_accuracy = validate(model, val_loader, 
                                                  optimizer, criterion, 
-                                                 val_data)
-    print(f"Train Loss: {train_epoch_loss:.4f}, Train Acc: {train_epoch_accuracy:.2f}")
-    print(f"Validation Loss: {val_epoch_loss:.4f}, Val Acc: {val_epoch_accuracy:.2f}")
+                                                 val_data, epoch + 1)
+    print(f"Train Loss: {train_epoch_loss:.4f}")
+    print(f"Validation Loss: {val_epoch_loss:.4f}")

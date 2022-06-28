@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
-import matplotlib.pyplot as plt
 
 class STN(nn.Module):
     def __init__(self):
         super(STN, self).__init__()
-        # spatial transformer localization network
+        # spatial transformer localisation network
         self.localization = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=7),
             nn.MaxPool2d(2, stride=2),
@@ -24,15 +23,11 @@ class STN(nn.Module):
         self.fc_loc[2].weight.data.zero_()
         self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0, 0, 0, 1],
                                                     dtype=torch.float))
-    def stn(self, x):
-        xs = self.localization(x)
-        xs = xs.view(-1, xs.size(1)*xs.size(2)*xs.size(3))
-        # calculate the transformation parameters theta
-        theta = self.fc_loc(xs)
-        # resize theta
-        theta = theta.view(-1, 3, 3) 
-        return theta
     
+
     def forward(self, x):
-        trans_mats = self.stn(x)
-        return trans_mats
+        xs = self.localization(x)                           # get feature map from localiser
+        xs = xs.view(-1, xs.size(1)*xs.size(2)*xs.size(3))  # resize feature map
+        theta = self.fc_loc(xs)                             # calculate the transformation parameters theta
+        theta = theta.view(-1, 3, 3)                        # resize theta into 3x3 transformation matrix
+        return theta
