@@ -5,5 +5,4 @@ torch
 torchvision
 pandas
 scikit-image
-six
 tqdm
