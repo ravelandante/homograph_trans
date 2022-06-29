@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import sys
 
 
 DRAW_BOXES = False                           # whether to draw bounding boxes
@@ -93,6 +94,16 @@ def calc_edges(corners, out_size=IN_SIZE):
 
 
 def img_transform(img_orig, row, width, height):
+    """Applies a random homograph transform to image and calculates inverse transform matrix
+    Args:
+        img_orig (OpenCV image): unmodified frame image
+        row (numpy array): tracking data for person
+        width (int): width of image
+        height (int): height of image
+    Returns:
+        OpenCV image: warped image
+        numpy array: 3x3 inverse transform matrix
+    """
     bounds = []
     # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
     obj_ID, bounds = row[1], [row[2], row[3], row[2] + row[4], row[3] + row[5]]             # coords of original image
@@ -144,7 +155,7 @@ def img_transform(img_orig, row, width, height):
         fx, fy = IN_SIZE[0]/n_width, IN_SIZE[1]/n_height            # scaling factors
     except ZeroDivisionError:
         print('Zero Division', '\nobj_ID:', obj_ID, 'dims:', (n_width, n_height), 'corners:', crop)
-        #continue
+        sys.exit(1)
 
     img_persp = cv2.resize(img_persp, IN_SIZE, fx=fx, fy=fy)        # scale up to out_size
 
