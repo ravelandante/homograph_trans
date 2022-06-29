@@ -4,7 +4,7 @@ import torch.nn as nn
 import model
 from torch.utils.data import DataLoader
 from torchvision import  transforms
-from load_dataset.custom_MOT import custom_MOT
+from custom_MOT import custom_MOT
 from tqdm import tqdm
 import cv2
 
@@ -12,16 +12,13 @@ import cv2
 learning_rate = 0.001
 epochs = 10
 batch_size = 4
-# image transforms
-transform = transforms.Compose([
-                       transforms.ToTensor(),
-                   ])
 #computation device
 #device =  torch.device('cuda' if torch.cuda.is_available else 'cpu')
 
 # train and validation datasets
-train_data = custom_MOT(csv_file='load_dataset/MOT_data/MOT_labels.csv', root_dir='load_dataset/MOT_data/train/')
-val_data = custom_MOT(csv_file='load_dataset/MOT_data/MOT_labels.csv', root_dir='load_dataset/MOT_data/train/')
+train_data = custom_MOT(csv_file='data/MOT15/MOT_labels.csv', root_dir='data/MOT15/train/ADL-Rundle-6/img1')
+val_data = custom_MOT(csv_file='data/MOT15/MOT_labels.csv', root_dir='data/MOT15/train/ADL-Rundle-6/img1')
+#test_data = custom_MOT(csv_file='data/MOT15/MOT_labels.csv', root_dir='data/MOT15/train/TUD-Campus/img1')
 
 # train data loader
 train_loader = DataLoader(
@@ -79,9 +76,11 @@ def validate(model, dataloader, optimizer, criterion, val_data, epoch):
                 img = data[0].numpy()
                 img = img.transpose(1, 2, 0)
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                tar = target[0].numpy()
+                print(target[0].numpy())
+                print('\n', outputs[0].numpy())
+                tar = outputs[0].numpy()
                 img_warp = cv2.warpPerspective(img, tar, (256, 256), borderMode=cv2.BORDER_CONSTANT, borderValue=(127,127,127))
-                img_warp = img_warp[0:256, 64:192]
+                #img_warp = img_warp[0:256, 64:192]
                 cv2.imshow('orig warped', img)
                 cv2.imshow('new warped', img_warp)
                 cv2.waitKey(0)

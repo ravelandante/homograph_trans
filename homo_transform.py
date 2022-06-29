@@ -1,18 +1,15 @@
 import cv2
 import numpy as np
-import pandas as pd
 
 
 DRAW_BOXES = False                           # whether to draw bounding boxes
 SHOW_INVERSE = False                         # whether to display images at the end of each loop
 
-FRAMES = -1                                  # num of frames to process (-1 to process all)
 IN_SIZE = (256, 256)
 OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
 BORDER_VALUE = (127, 127, 127)
 
-#np.random.seed(146)
 
 def random_shift(points):
     """Calculates random shift for 4 points of bounding box
@@ -95,7 +92,7 @@ def calc_edges(corners, out_size=IN_SIZE):
     return [int(c) for c in [bounds[0] - pad_lst[0], bounds[1] - pad_lst[1], bounds[2] + pad_lst[2], bounds[3] + pad_lst[3]]]
 
 
-def transform(img_orig, row, width, height):
+def img_transform(img_orig, row, width, height):
     bounds = []
     # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
     obj_ID, bounds = row[1], [row[2], row[3], row[2] + row[4], row[3] + row[5]]             # coords of original image
