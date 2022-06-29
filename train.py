@@ -3,7 +3,7 @@ import torch.optim as optim
 import torch.nn as nn
 import model
 from torch.utils.data import DataLoader
-from torchvision import  transforms
+#from torchvision import  transforms
 from custom_MOT import custom_MOT
 from tqdm import tqdm
 import cv2
@@ -12,6 +12,7 @@ import cv2
 learning_rate = 0.001
 epochs = 10
 batch_size = 4
+
 #computation device
 #device =  torch.device('cuda' if torch.cuda.is_available else 'cpu')
 
@@ -78,11 +79,11 @@ def validate(model, dataloader, optimizer, criterion, val_data, epoch):
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
                 print(target[0].numpy())
                 print('\n', outputs[0].numpy())
-                tar = outputs[0].numpy()
-                img_warp = cv2.warpPerspective(img, tar, (256, 256), borderMode=cv2.BORDER_CONSTANT, borderValue=(127,127,127))
-                #img_warp = img_warp[0:256, 64:192]
+                img_warp = cv2.warpPerspective(img, outputs[0].numpy(), (256, 256), borderMode=cv2.BORDER_CONSTANT, borderValue=(127,127,127))
+                img_warp_ideal = cv2.warpPerspective(img, target[0].numpy(), (256, 256), borderMode=cv2.BORDER_CONSTANT, borderValue=(127,127,127))
                 cv2.imshow('orig warped', img)
-                cv2.imshow('new warped', img_warp)
+                cv2.imshow('network out', img_warp)
+                cv2.imshow('target out', img_warp_ideal)
                 cv2.waitKey(0)
 
             val_running_loss += loss.item()
