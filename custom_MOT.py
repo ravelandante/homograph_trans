@@ -10,11 +10,11 @@ from homo_transform import img_transform
 SET_NAME = 'ADL-Rundle-6'                   # name of dataset
 BASE_PATH = 'data/MOT15/train/' + SET_NAME
 
-FRAMES = 70                                # num of frames to generate (-1 to process all)
+FRAMES = 70                                 # num of frames to generate (-1 to process all)
 
 class custom_MOT(Dataset):
     def __init__(self, csv_file, root_dir, transform=None):
-        custom_MOT.populate()                                                               # populate csv file with FRAMES
+        custom_MOT.populate()                                                               # populate csv file with filenames + object IDs
         self.data = pd.read_csv(csv_file)
         self.root_dir = root_dir
         self.transform = transform
@@ -23,7 +23,7 @@ class custom_MOT(Dataset):
         return len(self.data)
 
     def populate():
-        gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')                            # open/organise ground-truth tracking data
+        gt = genfromtxt(BASE_PATH + '/gt/gt.txt', delimiter=',')                            # open, organise ground-truth tracking data
         gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
 
         for i, _ in enumerate(os.listdir(BASE_PATH + '/img1')):                             # loop through frames
@@ -50,7 +50,7 @@ class custom_MOT(Dataset):
         height, width, _ = img_orig.shape
         line_num = 0
         for i, obj in enumerate(gt[frame_num]):                                             # find object ID within frame lines
-            if obj[1] == obj_ID:
+            if int(obj[1]) == int(obj_ID):
                 line_num = i
         img_warp, label = img_transform(img_orig, gt[frame_num][line_num], width, height)   # get warped image
 
