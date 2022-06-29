@@ -47,6 +47,7 @@ class custom_MOT(Dataset):
 
         frame_num = int(self.data.iloc[idx, 0][0:-4]) - 1
         img_orig = io.imread(img_name)
+        
         height, width, _ = img_orig.shape
         line_num = 0
         for i, obj in enumerate(gt[frame_num]):                                             # find object ID within frame lines
