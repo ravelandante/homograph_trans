@@ -1,15 +1,24 @@
+"""
+* Applying random homograph transforms (affine rotation, perspective transform) to images from the MOT15 dataset
+* Padding, cropping, resizing transformed image to IN_SIZE for neural network input
+* Calculating inverse transform matrix
+Author: Fynn Young
+        30/06/2022
+"""
+
 import cv2
 import numpy as np
 import sys
 
 
-DRAW_BOXES = False                           # whether to draw bounding boxes
-SHOW_INVERSE = False                         # whether to display images at the end of each loop
+DRAW_BOXES = False                  # whether to draw bounding boxes
 
 IN_SIZE = (256, 256)
 OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
 BORDER_VALUE = (127, 127, 127)
+
+SHIFT_FACTOR = 0.23
 
 
 def random_shift(points):
@@ -23,7 +32,7 @@ def random_shift(points):
     points = np.array(points)
     orig_points = np.array(points)
     width, height = points[1][0] - points[0][0], points[1][1] - points[2][1]
-    x_shift, y_shift = 0.23*width, 0.23*height
+    x_shift, y_shift = SHIFT_FACTOR*width, SHIFT_FACTOR*height                  # get random shifts based on bounding box dimensions
 
     # bot_left
     points[0][0] += np.random.randint(0, x_shift)
@@ -147,19 +156,19 @@ def img_transform(img_orig, row, width, height):
         points = points.reshape((-1, 1, 2))
         cv2.polylines(img_persp, [points], True, (0, 255, 0), thickness=1)
         
-    img_persp = img_persp[crop[1]:crop[3], crop[0]:crop[2]]         # crop using calculated bounds and padding
+    img_persp = img_persp[crop[1]:crop[3], crop[0]:crop[2]]                     # crop using calculated bounds and padding
 
-    # catch zero division (usually if cropping bound is < 0)
+    # catch zero division (usually if cropping bound ends up as < 0)
     try:
-        n_width, n_height, _ = img_persp.shape                      # dimensions of image before scaling
-        fx, fy = IN_SIZE[0]/n_width, IN_SIZE[1]/n_height            # scaling factors
+        n_width, n_height, _ = img_persp.shape                                  # dimensions of image before scaling
+        fx, fy = IN_SIZE[0]/n_width, IN_SIZE[1]/n_height                        # scaling factors
     except ZeroDivisionError:
         print('Zero Division', '\nobj_ID:', obj_ID, 'dims:', (n_width, n_height), 'corners:', crop)
         sys.exit(1)
 
-    img_persp = cv2.resize(img_persp, IN_SIZE, fx=fx, fy=fy)        # scale up to out_size
+    img_persp = cv2.resize(img_persp, IN_SIZE, fx=fx, fy=fy)                    # scale up to out_size
 
-    # inverse matrices
+    # calculate inverse matrices
     inv_rot_mat = cv2.getRotationMatrix2D((IN_SIZE[0]//2, IN_SIZE[0]//2), -angle, scale=1)
     src_mat = dst_mat - diff
     for j, _ in enumerate(corners):
@@ -179,7 +188,7 @@ def img_transform(img_orig, row, width, height):
     inv_persp_mat = cv2.getPerspectiveTransform(inv_dst_mat, inv_src_mat)
 
     rot_row = np.array([0,0,1])
-    inv_rot_mat = np.vstack((inv_rot_mat, rot_row))                                         # add 3rd row to inv_rot_mat to be equal in shape to inv_persp_mat
-    final_inv_mat = np.dot(inv_persp_mat, inv_rot_mat)                                      # dot product to get final inverse matrix
+    inv_rot_mat = np.vstack((inv_rot_mat, rot_row))                             # add 3rd row to inv_rot_mat to be equal in shape to inv_persp_mat
+    final_inv_mat = np.dot(inv_persp_mat, inv_rot_mat)                          # dot product to get final inverse matrix
 
     return img_persp, final_inv_mat

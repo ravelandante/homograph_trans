@@ -20,21 +20,21 @@ class custom_MOT(Dataset):
         s.remove('img1')
         self.dataset_dir = '/'.join(s)
 
-        custom_MOT.populate(self)                                                               # populate csv file with filenames + object IDs
+        custom_MOT.populate(self)                                           # populate csv file with filenames + object IDs
         self.data = pd.read_csv(csv_file)
 
     def __len__(self):
         return len(self.data)
 
     def populate(self):
-        gt = genfromtxt(self.dataset_dir + '/gt/gt.txt', delimiter=',')                            # open, organise ground-truth tracking data
+        gt = genfromtxt(self.dataset_dir + '/gt/gt.txt', delimiter=',')     # open, organise ground-truth tracking data
         gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
 
-        for i, _ in enumerate(os.listdir(self.root_dir)):                             # loop through frames
-            for row in gt[i]:                                                               # loop through detections in frame
+        for i, _ in enumerate(os.listdir(self.root_dir)):                   # loop through frames
+            for row in gt[i]:                                               # loop through detections in frame
                 obj_ID = row[1]
 
-                with open(self.csv_file, 'a') as f:                           # write filenames to csv file for dataloader use
+                with open(self.csv_file, 'a') as f:                         # write filenames to csv file for dataloader use
                     if i == 0 and obj_ID == 1:
                         f.truncate(17)
                     f.write('\n{:06}.jpg,{}'.format(i + 1, int(obj_ID)))
@@ -47,7 +47,7 @@ class custom_MOT(Dataset):
         img_name = os.path.join(self.root_dir, str(self.data.iloc[idx, 0]))
         obj_ID = os.path.join(str(self.data.iloc[idx, 1]))                                  # get ID of object requested
 
-        gt = genfromtxt(self.dataset_dir + '/gt/gt.txt', delimiter=',')                            # open/organise ground-truth tracking data
+        gt = genfromtxt(self.dataset_dir + '/gt/gt.txt', delimiter=',')                     # open/organise ground-truth tracking data
         gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
 
         frame_num = int(self.data.iloc[idx, 0][0:-4]) - 1
