@@ -3,7 +3,7 @@
 * Padding, cropping, resizing transformed image to IN_SIZE for neural network input
 * Calculating inverse transform matrix
 Author: Fynn Young
-        30/06/2022
+        01/07/2022
 """
 
 import cv2
@@ -18,7 +18,8 @@ OUT_SIZE = (128, 256)
 BORDER_MODE = cv2.BORDER_CONSTANT
 BORDER_VALUE = (127, 127, 127)
 
-SHIFT_FACTOR = 0.23
+SHIFT_FACTOR = 0.23                 # factor for random warping of bounding box
+ANGLE_MAX_MIN = 30                  # max and min of random angle of rotation
 
 
 def random_shift(points):
@@ -116,7 +117,7 @@ def img_transform(img_orig, row, width, height):
     bounds = []
     # NOTE: bounds[0] = x_min, bounds[1] = y_min, bounds[2] = x_max, bounds[3] = y_max
     obj_ID, bounds = row[1], [row[2], row[3], row[2] + row[4], row[3] + row[5]]             # coords of original image
-    angle = np.random.randint(-80, 80)
+    angle = np.random.randint(-ANGLE_MAX_MIN, ANGLE_MAX_MIN)
 
     # translation of bounding box to image centre to prevent rotated image corners getting cut off by image bounds
     trans_mat, bounds = centre_shift(bounds, width, height)

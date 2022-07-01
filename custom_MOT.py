@@ -27,8 +27,12 @@ class custom_MOT(Dataset):
         return len(self.data)
 
     def populate(self):
+        """
+        Populate corresponding CSV file (train, test, val) with image
+        names and object IDs in form: Filename,ObjectID
+        """
         gt = genfromtxt(self.dataset_dir + '/gt/gt.txt', delimiter=',')     # open, organise ground-truth tracking data
-        gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
+        gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)                  # split by frame number
 
         for i, _ in enumerate(os.listdir(self.root_dir)):                   # loop through frames
             for row in gt[i]:                                               # loop through detections in frame
@@ -44,20 +48,21 @@ class custom_MOT(Dataset):
     def __getitem__(self, idx):
         transform = transforms.Compose([transforms.ToTensor()])
 
-        img_name = os.path.join(self.root_dir, str(self.data.iloc[idx, 0]))
+        img_name = os.path.join(self.root_dir, str(self.data.iloc[idx, 0]))                 # get image path
         obj_ID = os.path.join(str(self.data.iloc[idx, 1]))                                  # get ID of object requested
 
         gt = genfromtxt(self.dataset_dir + '/gt/gt.txt', delimiter=',')                     # open/organise ground-truth tracking data
-        gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)
+        gt = np.split(gt, np.where(np.diff(gt[:,0]))[0]+1)                                  # split by frame number
 
-        frame_num = int(self.data.iloc[idx, 0][0:-4]) - 1
+        frame_num = int(self.data.iloc[idx, 0][0:-4]) - 1                                   # get frame number from path
         img_orig = io.imread(img_name)
         
         height, width, _ = img_orig.shape
         line_num = 0
-        for i, obj in enumerate(gt[frame_num]):                                             # find object ID within frame lines
+        for i, obj in enumerate(gt[frame_num]):                                             # find object ID in lines for corresponding frame
             if int(obj[1]) == int(obj_ID):
                 line_num = i
+                break
         img_warp, label = img_transform(img_orig, gt[frame_num][line_num], width, height)   # get warped image
 
         image = transform(img_warp)
